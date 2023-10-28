@@ -9,10 +9,6 @@ import (
 	"github.com/zvonler/espy/database"
 )
 
-var (
-	dbPath string
-)
-
 func initGrepCommand() *cobra.Command {
 	grepCommand := &cobra.Command{
 		Use:   "grep [-d DB] <regex>...",

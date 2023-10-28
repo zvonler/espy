@@ -6,6 +6,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	dbPath string
+)
+
 func NewCommand() *cobra.Command {
 	threadCommand := &cobra.Command{
 		Use:   "thread",
@@ -15,6 +19,7 @@ func NewCommand() *cobra.Command {
 			"  " + os.Args[0] + " thread grep Cybertruck",
 	}
 
+	threadCommand.AddCommand(initContentCommand())
 	threadCommand.AddCommand(initGrepCommand())
 
 	return threadCommand

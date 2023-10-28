@@ -3,17 +3,16 @@ package database
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"log"
 	"net/url"
 	"os"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/zvonler/espy/model"
+	"github.com/zvonler/espy/utils"
 )
 
 type SiteID uint
@@ -71,18 +70,6 @@ func (sdb *ScraperDB) Close() {
 	sdb.DB.Close()
 }
 
-func trimmedURL(url *url.URL) *url.URL {
-	if strings.HasSuffix(url.RequestURI(), "/") {
-		// Eliminate trailing slashes to canonicalize URL for database
-		if trimmed, err := url.Parse(strings.TrimRight(url.String(), "/")); err != nil {
-			panic(fmt.Sprintf("Bad URL: %v", err))
-		} else {
-			return trimmed
-		}
-	}
-	return url
-}
-
 func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId ForumID) {
 	tx, err := sdb.DB.Begin()
 	if err != nil {
@@ -91,7 +78,7 @@ func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId 
 
 	siteId = sdb.getOrInsertSite(url.Hostname(), tx)
 
-	rows, err := tx.Stmt(sdb.insertForumStmt).Query(siteId, trimmedURL(url).String())
+	rows, err := tx.Stmt(sdb.insertForumStmt).Query(siteId, utils.TrimmedURL(url).String())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -120,7 +107,7 @@ func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t mod
 	authorId := sdb.getOrInsertAuthor(t.Author, siteId, tx)
 
 	stmt := tx.Stmt(sdb.insertThreadStmt)
-	rows, err := stmt.Query(forumId, authorId, t.Title, trimmedURL(t.URL).String(),
+	rows, err := stmt.Query(forumId, authorId, t.Title, utils.TrimmedURL(t.URL).String(),
 		t.Replies, t.Views, t.Latest.Unix(), t.StartDate.Unix())
 	if err != nil {
 		log.Fatal(err)
@@ -153,7 +140,7 @@ func (sdb *ScraperDB) GetThreadByURL(url *url.URL) (siteId SiteID, threadId Thre
 			AND t.url = ?`
 
 	var rows *sql.Rows
-	if rows, err = sdb.DB.Query(stmt, trimmedURL(url).String()); err == nil {
+	if rows, err = sdb.DB.Query(stmt, utils.TrimmedURL(url).String()); err == nil {
 		defer rows.Close()
 		if rows.Next() {
 			err = rows.Scan(&siteId, &threadId)
