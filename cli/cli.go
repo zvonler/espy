@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/zvonler/espy/cli/scrape"
+	"github.com/zvonler/espy/cli/thread"
 )
 
 func NewCommand() *cobra.Command {
@@ -17,6 +18,7 @@ func NewCommand() *cobra.Command {
 	}
 
 	espyCli.AddCommand(scrape.NewCommand())
+	espyCli.AddCommand(thread.NewCommand())
 
 	return espyCli
 }

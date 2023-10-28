@@ -5,8 +5,10 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"regexp"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -18,7 +20,7 @@ type CommentID uint
 
 type ScraperDB struct {
 	Filename             string
-	db                   *sql.DB
+	DB                   *sql.DB
 	insertForumStmt      *sql.Stmt
 	insertThreadStmt     *sql.Stmt
 	insertSiteStmt       *sql.Stmt
@@ -27,20 +29,31 @@ type ScraperDB struct {
 	commentTimeRangeStmt *sql.Stmt
 }
 
+func regex(re, s string) (bool, error) {
+	return regexp.MatchString(re, s)
+}
+
 func OpenScraperDB(path string) (sdb *ScraperDB) {
+	sql.Register("sqlite3_regex",
+		&sqlite3.SQLiteDriver{
+			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+				return conn.RegisterFunc("regexp", regex, true)
+			},
+		})
+
 	existing_db, err := exists(path)
 	if err != nil {
 		log.Fatalf("Error calling stat on %s: %v", path, err)
 	}
 
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite3_regex", path)
 	if err != nil {
 		log.Fatalf("Error opening database: %v", err)
 	}
 
 	sdb = new(ScraperDB)
 	sdb.Filename = path
-	sdb.db = db
+	sdb.DB = db
 
 	if !existing_db {
 		sdb.initTables()
@@ -51,11 +64,11 @@ func OpenScraperDB(path string) (sdb *ScraperDB) {
 }
 
 func (sdb *ScraperDB) Close() {
-	sdb.db.Close()
+	sdb.DB.Close()
 }
 
 func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId ForumID) {
-	tx, err := sdb.db.Begin()
+	tx, err := sdb.DB.Begin()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -84,7 +97,7 @@ func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId 
 }
 
 func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t Thread) (threadId ThreadID) {
-	tx, err := sdb.db.Begin()
+	tx, err := sdb.DB.Begin()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -151,7 +164,7 @@ func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []C
 		return
 	}
 
-	tx, err := sdb.db.Begin()
+	tx, err := sdb.DB.Begin()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -191,7 +204,7 @@ func (sdb *ScraperDB) FirstCommentLoaded(threadId ThreadID) bool {
 		SELECT MIN(published) FROM comment WHERE thread_id = ?
 			INTERSECT
 		SELECT start_date FROM thread WHERE id = ?`
-	rows, err := sdb.db.Query(sql, threadId, threadId)
+	rows, err := sdb.DB.Query(sql, threadId, threadId)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -201,7 +214,7 @@ func (sdb *ScraperDB) FirstCommentLoaded(threadId ThreadID) bool {
 
 func (sdb *ScraperDB) SetForumLastScraped(forumId ForumID, time time.Time) {
 	sql := "UPDATE forum SET last_scraped = ? WHERE id = ?"
-	_, err := sdb.db.Exec(sql, time.Unix(), forumId)
+	_, err := sdb.DB.Exec(sql, time.Unix(), forumId)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -251,7 +264,7 @@ CREATE TABLE comment (
 	UNIQUE(thread_id, author_id, published)
 );
 `
-	_, err := sdb.db.Exec(schema)
+	_, err := sdb.DB.Exec(schema)
 	if err != nil {
 		log.Printf("Error loading schema: %q\n", err)
 		return
@@ -261,7 +274,7 @@ CREATE TABLE comment (
 func (sdb *ScraperDB) initSQLStatements() {
 	var err error
 
-	sdb.insertForumStmt, err = sdb.db.Prepare(`
+	sdb.insertForumStmt, err = sdb.DB.Prepare(`
 		INSERT INTO forum
 			(site_id, url)
 		VALUES
@@ -273,7 +286,7 @@ func (sdb *ScraperDB) initSQLStatements() {
 		log.Fatal(err)
 	}
 
-	sdb.insertThreadStmt, err = sdb.db.Prepare(`
+	sdb.insertThreadStmt, err = sdb.DB.Prepare(`
 		INSERT INTO thread
 			(forum_id, author_id, title, url, replies, views, latest_activity, start_date)
 		VALUES
@@ -287,7 +300,7 @@ func (sdb *ScraperDB) initSQLStatements() {
 		log.Fatal(err)
 	}
 
-	sdb.insertSiteStmt, err = sdb.db.Prepare(`
+	sdb.insertSiteStmt, err = sdb.DB.Prepare(`
 		INSERT INTO site
 			(hostname)
 		VALUES
@@ -299,7 +312,7 @@ func (sdb *ScraperDB) initSQLStatements() {
 		log.Fatal(err)
 	}
 
-	sdb.insertAuthorStmt, err = sdb.db.Prepare(`
+	sdb.insertAuthorStmt, err = sdb.DB.Prepare(`
 		INSERT INTO author
 			(site_id, username)
 		VALUES
@@ -311,7 +324,7 @@ func (sdb *ScraperDB) initSQLStatements() {
 		log.Fatal(err)
 	}
 
-	sdb.insertCommentStmt, err = sdb.db.Prepare(`
+	sdb.insertCommentStmt, err = sdb.DB.Prepare(`
 		INSERT INTO comment
 			(thread_id, author_id, published, content)
 		VALUES
@@ -321,7 +334,7 @@ func (sdb *ScraperDB) initSQLStatements() {
 		log.Fatal(err)
 	}
 
-	sdb.commentTimeRangeStmt, err = sdb.db.Prepare(`
+	sdb.commentTimeRangeStmt, err = sdb.DB.Prepare(`
 		SELECT MIN(published), MAX(published) FROM COMMENT WHERE thread_id = ?`)
 	if err != nil {
 		log.Fatal(err)
