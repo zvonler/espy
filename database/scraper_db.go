@@ -102,11 +102,11 @@ func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t mod
 	if err != nil {
 		log.Fatal(err)
 	}
-	authorId := sdb.getOrInsertAuthor(t.Author(), siteId, tx)
+	authorId := sdb.getOrInsertAuthor(t.Author, siteId, tx)
 
 	stmt := tx.Stmt(sdb.insertThreadStmt)
-	rows, err := stmt.Query(forumId, authorId, t.Title(), t.URL().String(),
-		t.Replies(), t.Views(), t.Latest().Unix(), t.StartDate().Unix())
+	rows, err := stmt.Query(forumId, authorId, t.Title, t.URL.String(),
+		t.Replies, t.Views, t.Latest.Unix(), t.StartDate.Unix())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -171,8 +171,8 @@ func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []m
 	}
 
 	for _, comment := range comments {
-		authorId := sdb.getOrInsertAuthor(comment.Author(), siteId, tx)
-		_, err := tx.Stmt(sdb.insertCommentStmt).Exec(threadId, authorId, comment.Published().Unix(), comment.Content())
+		authorId := sdb.getOrInsertAuthor(comment.Author, siteId, tx)
+		_, err := tx.Stmt(sdb.insertCommentStmt).Exec(threadId, authorId, comment.Published.Unix(), comment.Content)
 		if err != nil {
 			log.Fatal(err)
 		}

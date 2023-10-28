@@ -15,22 +15,14 @@ import (
 /*---------------------------------------------------------------------------*/
 
 type RedditThread struct {
-	threadURL *url.URL
-	title     string
-	author    string
-	startDate time.Time
-	latest    time.Time
-	replies   uint
-	views     uint
+	model.Thread
 }
 
-func (rt RedditThread) URL() *url.URL        { return rt.threadURL }
-func (rt RedditThread) Title() string        { return rt.title }
-func (rt RedditThread) Author() string       { return rt.author }
-func (rt RedditThread) StartDate() time.Time { return rt.startDate }
-func (rt RedditThread) Latest() time.Time    { return rt.latest }
-func (rt RedditThread) Replies() uint        { return rt.replies }
-func (rt RedditThread) Views() uint          { return rt.views }
+/*---------------------------------------------------------------------------*/
+
+type RedditComment struct {
+	model.Comment
+}
 
 /*---------------------------------------------------------------------------*/
 
@@ -61,7 +53,7 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 	}
 	harvest, err := bot.Listing(subreddit, "")
 	if err != nil {
-		fmt.Println("Failed to fetch %s: ", subreddit, err)
+		fmt.Printf("Failed to fetch %s: %v\n", subreddit, err)
 		return
 	}
 
@@ -72,18 +64,6 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 
 	fs.db.SetForumLastScraped(forumId, time.Now())
 }
-
-/*---------------------------------------------------------------------------*/
-
-type RedditComment struct {
-	author    string
-	published time.Time
-	content   string
-}
-
-func (rc RedditComment) Author() string       { return rc.author }
-func (rc RedditComment) Published() time.Time { return rc.published }
-func (rc RedditComment) Content() string      { return rc.content }
 
 /*---------------------------------------------------------------------------*/
 
@@ -112,13 +92,15 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 		log.Fatal(err)
 	}
 	thread := RedditThread{
-		threadURL: permalink,
-		author:    ts.post.Author,
-		title:     ts.post.Name,
-		startDate: time.Unix(int64(ts.post.CreatedUTC), 0),
-		replies:   uint(ts.post.NumComments),
+		Thread: model.Thread{
+			URL:       permalink,
+			Author:    ts.post.Author,
+			Title:     ts.post.Name,
+			StartDate: time.Unix(int64(ts.post.CreatedUTC), 0),
+			Replies:   uint(ts.post.NumComments),
+		},
 	}
-	threadId := ts.db.InsertOrUpdateThread(ts.siteId, ts.forumId, thread)
+	threadId := ts.db.InsertOrUpdateThread(ts.siteId, ts.forumId, thread.Thread)
 	fmt.Printf("ThreadScraper %d loading comments from %s\n", threadId, permalink)
 
 	post, err := ts.bot.Thread(ts.post.Permalink)
@@ -127,16 +109,18 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 	}
 	for _, comment := range post.Replies {
 		rc := RedditComment{
-			author:    comment.Author,
-			published: time.Unix(int64(comment.CreatedUTC), 0),
-			content:   comment.Body,
+			Comment: model.Comment{
+				Author:    comment.Author,
+				Published: time.Unix(int64(comment.CreatedUTC), 0),
+				Content:   comment.Body,
+			},
 		}
 		ts.Comments = append(ts.Comments, rc)
 	}
 
 	comments := make([]model.Comment, len(ts.Comments), len(ts.Comments))
 	for i := range ts.Comments {
-		comments[i] = ts.Comments[i]
+		comments[i] = ts.Comments[i].Comment
 	}
 	ts.db.AddComments(ts.siteId, threadId, comments)
 }

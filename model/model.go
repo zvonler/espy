@@ -5,18 +5,18 @@ import (
 	"time"
 )
 
-type Thread interface {
-	URL() *url.URL
-	Title() string
-	Author() string
-	StartDate() time.Time
-	Latest() time.Time
-	Replies() uint
-	Views() uint
+type Thread struct {
+	URL       *url.URL
+	Title     string
+	Author    string
+	StartDate time.Time
+	Latest    time.Time
+	Replies   uint
+	Views     uint
 }
 
-type Comment interface {
-	Author() string
-	Published() time.Time
-	Content() string
+type Comment struct {
+	Author    string
+	Published time.Time
+	Content   string
 }

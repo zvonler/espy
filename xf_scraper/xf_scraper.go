@@ -10,46 +10,27 @@ import (
 
 	"github.com/caffix/cloudflare-roundtripper/cfrt"
 	"github.com/gocolly/colly"
+	"github.com/zvonler/espy/model"
 )
 
 /*---------------------------------------------------------------------------*/
 
 type XFThread struct {
-	threadURL *url.URL
-	title     string
-	author    string
-	startDate time.Time
-	latest    time.Time
-	replies   uint
-	views     uint
+	model.Thread
 }
-
-func (xft XFThread) URL() *url.URL        { return xft.threadURL }
-func (xft XFThread) Title() string        { return xft.title }
-func (xft XFThread) Author() string       { return xft.author }
-func (xft XFThread) StartDate() time.Time { return xft.startDate }
-func (xft XFThread) Latest() time.Time    { return xft.latest }
-func (xft XFThread) Replies() uint        { return xft.replies }
-func (xft XFThread) Views() uint          { return xft.views }
 
 func (t XFThread) pageURL(pageNum uint) *url.URL {
 	if pageNum == 1 {
-		return t.threadURL
+		return t.URL
 	}
-	return t.threadURL.JoinPath(fmt.Sprintf("page-%d", pageNum))
+	return t.URL.JoinPath(fmt.Sprintf("page-%d", pageNum))
 }
 
 /*---------------------------------------------------------------------------*/
 
 type XFComment struct {
-	author    string
-	published time.Time
-	content   string
+	model.Comment
 }
-
-func (xfc XFComment) Author() string       { return xfc.author }
-func (xfc XFComment) Published() time.Time { return xfc.published }
-func (xfc XFComment) Content() string      { return xfc.content }
 
 /*---------------------------------------------------------------------------*/
 
