@@ -21,11 +21,21 @@ func TestBasicDatabase(t *testing.T) {
 	firstLoaded := db.FirstCommentLoaded(ThreadID(0))
 	require.Equal(t, false, firstLoaded)
 
-	forumUrl, err := url.Parse("https://some-forum.com/forums/name.123")
+	forumHref := "https://some-forum.com/forums/name.123"
+	forumUrl, err := url.Parse(forumHref)
 	require.Equal(t, nil, err)
 	siteId, forumId := db.InsertOrUpdateForum(forumUrl)
 	require.Greater(t, siteId, SiteID(0))
 	require.Greater(t, forumId, ForumID(0))
+
+	{
+		// Test that trailing '/' is considered equal
+		forumUrl, err := url.Parse(forumHref + "/")
+		require.Equal(t, nil, err)
+		altSiteId, altForumId := db.InsertOrUpdateForum(forumUrl)
+		require.Equal(t, siteId, altSiteId)
+		require.Equal(t, forumId, altForumId)
+	}
 
 	threadUrl, err := url.Parse("https://some-forum.com/forums/name.123/thread-xyz")
 	require.Equal(t, nil, err)

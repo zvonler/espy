@@ -68,7 +68,7 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 	}
 
 	posts, _, err := client.Subreddit.NewPosts(context.Background(), subreddit, &reddit.ListOptions{
-		Limit: 100,
+		Limit: 300,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -106,7 +106,7 @@ func NewThreadScraper(siteId database.SiteID, forumId database.ForumID, post *re
 }
 
 func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
-	permalink, err := url.Parse(ts.post.Post.Permalink)
+	permalink, err := url.Parse("https://reddit.com" + ts.post.Post.Permalink)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -138,7 +138,6 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 		}
 	}
 
-	fmt.Printf("Adding %d top level comments\n", len(ts.post.Comments))
 	for _, comment := range ts.post.Comments {
 		toRc(comment)
 	}
@@ -147,6 +146,5 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 	for i := range ts.Comments {
 		comments[i] = ts.Comments[i].Comment
 	}
-	fmt.Printf("Adding %d comments\n", len(comments))
 	ts.db.AddComments(ts.siteId, threadId, comments)
 }

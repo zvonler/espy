@@ -12,13 +12,10 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly"
 	"github.com/zvonler/espy/database"
-	"github.com/zvonler/espy/model"
 	"golang.org/x/net/html"
 )
 
 type ThreadScraper struct {
-	siteId          database.SiteID
-	forumId         database.ForumID
 	threadId        database.ThreadID
 	thread          XFThread
 	db              *database.ScraperDB
@@ -30,15 +27,13 @@ type ThreadScraper struct {
 	latestScraped   time.Time
 }
 
-func NewThreadScraper(siteId database.SiteID, forumId database.ForumID, thread XFThread, db *database.ScraperDB) *ThreadScraper {
+func NewThreadScraper(threadId database.ThreadID, thread XFThread, db *database.ScraperDB) *ThreadScraper {
 	ts := new(ThreadScraper)
-	ts.siteId = siteId
-	ts.forumId = forumId
+	ts.threadId = threadId
 	ts.thread = thread
 	ts.db = db
 	ts.Comments = make([]XFComment, 0)
 	ts.pages = 1
-	ts.threadId = ts.db.InsertOrUpdateThread(ts.siteId, ts.forumId, ts.thread.Thread)
 
 	ts.pageNumScraper = newCollectorWithCFRoundtripper()
 	ts.pageNumScraper.OnHTML("nav.pageNavWrapper--mixed", func(e *colly.HTMLElement) {
@@ -209,10 +204,4 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 			}
 		}
 	}
-
-	comments := make([]model.Comment, len(ts.Comments), len(ts.Comments))
-	for i := range ts.Comments {
-		comments[i] = ts.Comments[i].Comment
-	}
-	ts.db.AddComments(ts.siteId, ts.threadId, comments)
 }

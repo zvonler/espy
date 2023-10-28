@@ -2,10 +2,13 @@ package database
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"log"
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -68,15 +71,27 @@ func (sdb *ScraperDB) Close() {
 	sdb.DB.Close()
 }
 
+func trimmedURL(url *url.URL) *url.URL {
+	if strings.HasSuffix(url.RequestURI(), "/") {
+		// Eliminate trailing slashes to canonicalize URL for database
+		if trimmed, err := url.Parse(strings.TrimRight(url.String(), "/")); err != nil {
+			panic(fmt.Sprintf("Bad URL: %v", err))
+		} else {
+			return trimmed
+		}
+	}
+	return url
+}
+
 func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId ForumID) {
 	tx, err := sdb.DB.Begin()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	siteId = sdb.getOrInsertSite(url.Hostname(), tx)
 
-	rows, err := tx.Stmt(sdb.insertForumStmt).Query(siteId, url.String())
+	rows, err := tx.Stmt(sdb.insertForumStmt).Query(siteId, trimmedURL(url).String())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -105,7 +120,7 @@ func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t mod
 	authorId := sdb.getOrInsertAuthor(t.Author, siteId, tx)
 
 	stmt := tx.Stmt(sdb.insertThreadStmt)
-	rows, err := stmt.Query(forumId, authorId, t.Title, t.URL.String(),
+	rows, err := stmt.Query(forumId, authorId, t.Title, trimmedURL(t.URL).String(),
 		t.Replies, t.Views, t.Latest.Unix(), t.StartDate.Unix())
 	if err != nil {
 		log.Fatal(err)
@@ -122,6 +137,29 @@ func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t mod
 	err = tx.Commit()
 	if err != nil {
 		log.Fatal(err)
+	}
+	return
+}
+
+func (sdb *ScraperDB) GetThreadByURL(url *url.URL) (siteId SiteID, threadId ThreadID, err error) {
+	stmt := `
+		SELECT
+			s.id, t.id
+		FROM
+			site s, forum f, thread t
+		WHERE
+			    s.id = f.site_id
+			AND f.id = t.forum_id
+			AND t.url = ?`
+
+	var rows *sql.Rows
+	if rows, err = sdb.DB.Query(stmt, trimmedURL(url).String()); err == nil {
+		defer rows.Close()
+		if rows.Next() {
+			err = rows.Scan(&siteId, &threadId)
+		} else {
+			err = errors.New("Not found")
+		}
 	}
 	return
 }

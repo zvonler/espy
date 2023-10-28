@@ -6,11 +6,11 @@ import (
 	"math/rand"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gocolly/colly"
 	"github.com/zvonler/espy/database"
+	"github.com/zvonler/espy/model"
 )
 
 type ForumScraper struct {
@@ -26,17 +26,7 @@ func NewForumScraper(forumURL *url.URL, db *database.ScraperDB) *ForumScraper {
 	fs.Threads = make([]XFThread, 0)
 	fs.collector = newCollectorWithCFRoundtripper()
 	fs.db = db
-
-	if strings.HasSuffix(forumURL.RequestURI(), "/") {
-		// Eliminate trailing slashes to canonicalize URL for database
-		if trimmed, err := url.Parse(strings.TrimRight(forumURL.String(), "/")); err == nil {
-			fs.forumURL = trimmed
-		} else {
-			log.Fatalf("Bad URL: %v", err)
-		}
-	} else {
-		fs.forumURL = forumURL
-	}
+	fs.forumURL = forumURL
 
 	fs.collector.OnHTML("div.node--forum", func(e *colly.HTMLElement) {
 		e.ForEach("h3.node-title", func(_ int, e *colly.HTMLElement) {
@@ -117,8 +107,15 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 		}
 
 		for _, thread := range fs.Threads {
-			ts := NewThreadScraper(siteId, forumId, thread, fs.db)
+			threadId := fs.db.InsertOrUpdateThread(siteId, forumId, thread.Thread)
+			ts := NewThreadScraper(threadId, thread, fs.db)
 			ts.LoadCommentsSince(cutoff)
+
+			comments := make([]model.Comment, len(ts.Comments), len(ts.Comments))
+			for i := range ts.Comments {
+				comments[i] = ts.Comments[i].Comment
+			}
+			ts.db.AddComments(siteId, threadId, comments)
 		}
 	}
 
