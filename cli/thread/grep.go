@@ -1,9 +1,9 @@
 package thread
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/zvonler/espy/database"
@@ -23,34 +23,36 @@ func initGrepCommand() *cobra.Command {
 }
 
 func runGrepCommand(cmd *cobra.Command, args []string) {
-	sdb := database.OpenScraperDB(dbPath)
+	sdb, err := database.OpenScraperDB(dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer sdb.Close()
 
-	filters := []string{}
-	for _, arg := range args {
-		filters = append(filters, fmt.Sprintf("c.content REGEXP %q", arg))
-	}
-	filterStr := strings.Join(filters, " AND ")
-
-	sql := `
+	stmt := `
 		SELECT DISTINCT
 			t.id, t.title, t.url
 		FROM thread t, comment c
 		WHERE
-			    t.id = c.thread_id
-		AND `
-	sql = sql + filterStr
+			t.id = c.thread_id`
 
-	rows, err := sdb.DB.Query(sql)
-	if err != nil {
-		log.Fatal(err)
+	for _ = range args {
+		stmt += " AND c.content REGEXP ?"
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var id uint
-		var title string
-		var URL string
-		rows.Scan(&id, &title, &URL)
-		fmt.Printf("Thread %d: %q (%s)\n", id, title, URL)
+
+	anyArgs := make([]any, len(args))
+	for i := range args {
+		anyArgs[i] = args[i]
 	}
+
+	sdb.ForEachRowOrPanic(
+		func(rows *sql.Rows) bool {
+			var id uint
+			var title string
+			var URL string
+			rows.Scan(&id, &title, &URL)
+			fmt.Printf("Thread %d: %q (%s)\n", id, title, URL)
+			return true
+		},
+		stmt, anyArgs...)
 }

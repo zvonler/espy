@@ -1,7 +1,9 @@
 package thread
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -25,8 +27,18 @@ func initContentCommand() *cobra.Command {
 }
 
 func runContentCommand(cmd *cobra.Command, args []string) {
-	sdb := database.OpenScraperDB(dbPath)
+	sdb, err := database.OpenScraperDB(dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer sdb.Close()
+
+	printRows := func(rows *sql.Rows) bool {
+		var content string
+		rows.Scan(&content)
+		fmt.Println(content)
+		return true
+	}
 
 	var digitCheck = regexp.MustCompile(`^[0-9]+$`)
 	if digitCheck.MatchString(args[0]) {
@@ -36,27 +48,17 @@ func runContentCommand(cmd *cobra.Command, args []string) {
 			panic(err)
 		}
 
-		sql := `SELECT content FROM comment c WHERE c.thread_id = ?`
-
-		if rows, err := sdb.DB.Query(sql, threadId); err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var content string
-				rows.Scan(&content)
-				fmt.Println(content)
-			}
-		} else {
-			panic(err)
-		}
+		stmt := `SELECT content FROM comment c WHERE c.thread_id = ?`
+		sdb.ForEachRowOrPanic(printRows, stmt, threadId)
 	} else {
 		url, err := url.Parse(args[0])
 		if err != nil {
-			panic(err)
+			log.Fatalf("Failed to parse thread URL: %v", err)
 		}
 		url = utils.TrimmedURL(url)
 
 		// Query by thread URL
-		sql := `
+		stmt := `
 			SELECT
 				content
 			FROM comment c, thread t
@@ -64,15 +66,6 @@ func runContentCommand(cmd *cobra.Command, args []string) {
 				    c.thread_id = t.id
 				AND t.url = ?`
 
-		if rows, err := sdb.DB.Query(sql, url.String()); err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var content string
-				rows.Scan(&content)
-				fmt.Println(content)
-			}
-		} else {
-			panic(err)
-		}
+		sdb.ForEachRowOrPanic(printRows, stmt, url.String())
 	}
 }

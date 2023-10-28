@@ -15,7 +15,8 @@ func TestBasicDatabase(t *testing.T) {
 	tmpDir := t.TempDir()
 	defer os.RemoveAll(tmpDir)
 
-	db := OpenScraperDB(tmpDir + "/test.db")
+	db, err := OpenScraperDB(tmpDir + "/test.db")
+	require.Equal(t, nil, err)
 	defer db.Close()
 
 	firstLoaded := db.FirstCommentLoaded(ThreadID(0))

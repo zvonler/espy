@@ -41,28 +41,31 @@ func runScrapeCommand(cmd *cobra.Command, args []string) {
 		log.Fatalf("Bad URL: %v", err)
 	}
 
-	db := database.OpenScraperDB(dbPath)
-	defer db.Close()
+	sdb, err := database.OpenScraperDB(dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer sdb.Close()
 
 	cutoff := time.Now().AddDate(0, 0, -lookbackDays)
 
 	if strings.Contains(url.Host, "reddit.com") {
-		fs := reddit.NewForumScraper(url, db)
+		fs := reddit.NewForumScraper(url, sdb)
 		fs.LoadThreadsWithActivitySince(cutoff)
 	} else if strings.Contains(url.Path, "/forums/") {
-		fs := xf_scraper.NewForumScraper(url, db)
+		fs := xf_scraper.NewForumScraper(url, sdb)
 		fs.LoadThreadsWithActivitySince(cutoff)
 	} else if strings.Contains(url.Path, "/threads/") {
 		// If url already in thread table, create ThreadScraper
-		if siteId, threadId, err := db.GetThreadByURL(url); err == nil {
+		if siteId, threadId, err := sdb.GetThreadByURL(url); err == nil {
 			thread := xf_scraper.XFThread{model.Thread{URL: url}}
-			ts := xf_scraper.NewThreadScraper(threadId, thread, db)
+			ts := xf_scraper.NewThreadScraper(threadId, thread, sdb)
 			ts.LoadCommentsSince(cutoff)
 			comments := make([]model.Comment, len(ts.Comments), len(ts.Comments))
 			for i := range ts.Comments {
 				comments[i] = ts.Comments[i].Comment
 			}
-			db.AddComments(siteId, threadId, comments)
+			sdb.AddComments(siteId, threadId, comments)
 		} else {
 			// Else get forum from thread page?
 			panic("Can't load new thread without forum and site\n")

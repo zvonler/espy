@@ -36,7 +36,7 @@ func regex(re, s string) (bool, error) {
 	return regexp.MatchString(re, s)
 }
 
-func OpenScraperDB(path string) (sdb *ScraperDB) {
+func OpenScraperDB(path string) (sdb *ScraperDB, err error) {
 	sql.Register("sqlite3_regex",
 		&sqlite3.SQLiteDriver{
 			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
@@ -44,30 +44,43 @@ func OpenScraperDB(path string) (sdb *ScraperDB) {
 			},
 		})
 
-	existing_db, err := exists(path)
-	if err != nil {
-		log.Fatalf("Error calling stat on %s: %v", path, err)
+	if existing_db, err := exists(path); err == nil {
+		if db, err := sql.Open("sqlite3_regex", path); err == nil {
+			sdb = new(ScraperDB)
+			sdb.Filename = path
+			sdb.DB = db
+			sdb.initSQLStatements()
+			if !existing_db {
+				sdb.initTables()
+			}
+		}
 	}
-
-	db, err := sql.Open("sqlite3_regex", path)
-	if err != nil {
-		log.Fatalf("Error opening database: %v", err)
-	}
-
-	sdb = new(ScraperDB)
-	sdb.Filename = path
-	sdb.DB = db
-
-	if !existing_db {
-		sdb.initTables()
-	}
-
-	sdb.initSQLStatements()
 	return
 }
 
 func (sdb *ScraperDB) Close() {
 	sdb.DB.Close()
+}
+
+type RowsReceiver func(*sql.Rows) bool
+
+func (sdb *ScraperDB) ForEachRowOrPanic(receiver RowsReceiver, stmt string, params ...any) {
+	if rows, err := sdb.DB.Query(stmt, params...); err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			if !receiver(rows) {
+				break
+			}
+		}
+	} else {
+		panic(err)
+	}
+}
+
+func (sdb *ScraperDB) ExecOrPanic(stmt string, params ...any) {
+	if _, err := sdb.DB.Exec(stmt, params...); err != nil {
+		panic(err)
+	}
 }
 
 func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId ForumID) {
@@ -239,11 +252,7 @@ func (sdb *ScraperDB) FirstCommentLoaded(threadId ThreadID) bool {
 }
 
 func (sdb *ScraperDB) SetForumLastScraped(forumId ForumID, time time.Time) {
-	sql := "UPDATE forum SET last_scraped = ? WHERE id = ?"
-	_, err := sdb.DB.Exec(sql, time.Unix(), forumId)
-	if err != nil {
-		log.Fatal(err)
-	}
+	sdb.ExecOrPanic("UPDATE forum SET last_scraped = ? WHERE id = ?", time.Unix(), forumId)
 }
 
 func (sdb *ScraperDB) initTables() {

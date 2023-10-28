@@ -29,7 +29,10 @@ func runIntersectCommand(cmd *cobra.Command, args []string) {
 	authorQuery := "SELECT username FROM author WHERE "
 	sql := fmt.Sprintf("%s %s INTERSECT %s %s", authorQuery, args[0], authorQuery, args[1])
 
-	sdb := database.OpenScraperDB(dbPath)
+	sdb, err := database.OpenScraperDB(dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer sdb.Close()
 	rows, err := sdb.DB.Query(sql)
 	if err != nil {
