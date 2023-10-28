@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/zvonler/espy/cli/author"
 	"github.com/zvonler/espy/cli/scrape"
 	"github.com/zvonler/espy/cli/thread"
 )
@@ -17,6 +18,7 @@ func NewCommand() *cobra.Command {
 		Example: fmt.Sprintf("  %s <command> [flags...]", os.Args[0]),
 	}
 
+	espyCli.AddCommand(author.NewCommand())
 	espyCli.AddCommand(scrape.NewCommand())
 	espyCli.AddCommand(thread.NewCommand())
 
