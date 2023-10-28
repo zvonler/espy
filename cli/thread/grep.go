@@ -6,11 +6,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/zvonler/espy/xf_scraper"
+	"github.com/zvonler/espy/database"
 )
 
 var (
-	database string
+	dbPath string
 )
 
 func initGrepCommand() *cobra.Command {
@@ -21,13 +21,13 @@ func initGrepCommand() *cobra.Command {
 		Run:   runGrepCommand,
 	}
 
-	grepCommand.Flags().StringVar(&database, "database", "espy.db", "Database filename")
+	grepCommand.Flags().StringVar(&dbPath, "database", "espy.db", "Database filename")
 
 	return grepCommand
 }
 
 func runGrepCommand(cmd *cobra.Command, args []string) {
-	sdb := xf_scraper.OpenScraperDB(database)
+	sdb := database.OpenScraperDB(dbPath)
 	defer sdb.Close()
 
 	filters := []string{}

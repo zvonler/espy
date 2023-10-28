@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/zvonler/espy/database"
 	"github.com/zvonler/espy/xf_scraper"
 )
 
@@ -35,7 +36,7 @@ func runScrapeCommand(cmd *cobra.Command, args []string) {
 		log.Fatalf("Bad URL: %v", err)
 	}
 
-	db := xf_scraper.OpenScraperDB(args[1])
+	db := database.OpenScraperDB(args[1])
 	defer db.Close()
 
 	fs := xf_scraper.NewForumScraper(url, db)

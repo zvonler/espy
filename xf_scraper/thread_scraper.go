@@ -11,16 +11,18 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly"
+	"github.com/zvonler/espy/database"
+	"github.com/zvonler/espy/model"
 	"golang.org/x/net/html"
 )
 
 type ThreadScraper struct {
-	siteId          SiteID
-	forumId         ForumID
-	threadId        ThreadID
-	thread          Thread
-	db              *ScraperDB
-	Comments        []Comment
+	siteId          database.SiteID
+	forumId         database.ForumID
+	threadId        database.ThreadID
+	thread          XFThread
+	db              *database.ScraperDB
+	Comments        []XFComment
 	pages           uint
 	commentScraper  *colly.Collector
 	pageNumScraper  *colly.Collector
@@ -28,13 +30,13 @@ type ThreadScraper struct {
 	latestScraped   time.Time
 }
 
-func NewThreadScraper(siteId SiteID, forumId ForumID, thread Thread, db *ScraperDB) *ThreadScraper {
+func NewThreadScraper(siteId database.SiteID, forumId database.ForumID, thread XFThread, db *database.ScraperDB) *ThreadScraper {
 	ts := new(ThreadScraper)
 	ts.siteId = siteId
 	ts.forumId = forumId
 	ts.thread = thread
 	ts.db = db
-	ts.Comments = make([]Comment, 0)
+	ts.Comments = make([]XFComment, 0)
 	ts.pages = 1
 	ts.threadId = ts.db.InsertOrUpdateThread(ts.siteId, ts.forumId, ts.thread)
 
@@ -68,8 +70,8 @@ func NewThreadScraper(siteId SiteID, forumId ForumID, thread Thread, db *Scraper
 
 	ts.commentScraper = newCollectorWithCFRoundtripper()
 	ts.commentScraper.OnHTML("article.message--post", func(e *colly.HTMLElement) {
-		temp := Comment{}
-		temp.Author = e.Attr("data-author")
+		temp := XFComment{}
+		temp.author = e.Attr("data-author")
 		e.ForEach("article.message-body", func(_ int, e *colly.HTMLElement) {
 			// These get just the content of the blockquote
 			// temp.Content = e.DOM.ChildrenFiltered(".bbCodeBlock--quote").Text()
@@ -98,7 +100,7 @@ func NewThreadScraper(siteId SiteID, forumId ForumID, thread Thread, db *Scraper
 					return
 				}
 				if n.Type == html.TextNode {
-					temp.Content += n.Data
+					temp.content += n.Data
 				}
 				for c := n.FirstChild; c != nil; c = c.NextSibling {
 					collectText(c)
@@ -108,31 +110,31 @@ func NewThreadScraper(siteId SiteID, forumId ForumID, thread Thread, db *Scraper
 		})
 
 		// Replace non-breaking spaces with regular spaces
-		temp.Content = strings.ReplaceAll(temp.Content, "\u00a0", " ")
+		temp.content = strings.ReplaceAll(temp.content, "\u00a0", " ")
 
 		// Remove whitespace-only lines
 		wsLinePat := regexp.MustCompile("\n[ \t]+\n")
-		temp.Content = string(wsLinePat.ReplaceAll([]byte(temp.Content), []byte("\n")))
+		temp.content = string(wsLinePat.ReplaceAll([]byte(temp.content), []byte("\n")))
 
 		// Replace repeated newlines with singles
 		nlPat := regexp.MustCompile("\n\n+")
-		temp.Content = string(nlPat.ReplaceAll([]byte(temp.Content), []byte("\n")))
+		temp.content = string(nlPat.ReplaceAll([]byte(temp.content), []byte("\n")))
 
 		// Trim leading and trailing newlines
-		temp.Content = strings.TrimLeft(temp.Content, "\n")
-		temp.Content = strings.TrimRight(temp.Content, "\n")
+		temp.content = strings.TrimLeft(temp.content, "\n")
+		temp.content = strings.TrimRight(temp.content, "\n")
 
 		e.ForEach("ul.message-attribution-main", func(_ int, e *colly.HTMLElement) {
 			dataTime := e.ChildAttr("time.u-dt", "data-time")
 			if tm, err := strconv.Atoi(dataTime); err != nil {
 				log.Printf("Unparseable data-time '%v' for %s", dataTime, temp.Author)
 			} else {
-				temp.Published = time.Unix(int64(tm), 0)
-				if temp.Published.After(ts.latestScraped) {
-					ts.latestScraped = temp.Published
+				temp.published = time.Unix(int64(tm), 0)
+				if temp.published.After(ts.latestScraped) {
+					ts.latestScraped = temp.published
 				}
-				if ts.earliestScraped.IsZero() || temp.Published.Before(ts.earliestScraped) {
-					ts.earliestScraped = temp.Published
+				if ts.earliestScraped.IsZero() || temp.published.Before(ts.earliestScraped) {
+					ts.earliestScraped = temp.published
 				}
 			}
 		})
@@ -157,9 +159,9 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 		// re-loading them.
 		earliest, latest := timeRange[0], timeRange[1]
 
-		if ts.thread.Latest != latest {
+		if ts.thread.Latest() != latest {
 			// Loading the first page of the thread gets us the last page number
-			ts.pageNumScraper.Visit(ts.thread.URL.String())
+			ts.pageNumScraper.Visit(ts.thread.URL().String())
 			time.Sleep(1 + time.Duration(rand.Intn(2))*time.Second)
 
 			// Load from last page until earlier than the latest already loaded
@@ -180,7 +182,7 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 			if !ts.db.FirstCommentLoaded(ts.threadId) {
 
 				// Loading the first page of the thread gets us the last page number
-				ts.pageNumScraper.Visit(ts.thread.URL.String())
+				ts.pageNumScraper.Visit(ts.thread.URL().String())
 				time.Sleep(1 + time.Duration(rand.Intn(2))*time.Second)
 				tpf := NewThreadPageFinder(ts.thread)
 				for pageNum := tpf.FindCommentsBefore(earliest, ts.pages); pageNum >= 1; pageNum-- {
@@ -195,7 +197,7 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 		}
 	} else {
 		// Loading the first page of the thread gets us the last page number
-		ts.pageNumScraper.Visit(ts.thread.URL.String())
+		ts.pageNumScraper.Visit(ts.thread.URL().String())
 
 		// Load from last page until earlier than cutoff or out of comments
 		for pageNum := ts.pages; pageNum >= 1; pageNum-- {
@@ -208,5 +210,9 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 		}
 	}
 
-	ts.db.AddComments(ts.siteId, ts.threadId, ts.Comments)
+	comments := make([]model.Comment, len(ts.Comments), len(ts.Comments))
+	for i := range ts.Comments {
+		comments[i] = ts.Comments[i]
+	}
+	ts.db.AddComments(ts.siteId, ts.threadId, comments)
 }

@@ -10,19 +10,20 @@ import (
 	"time"
 
 	"github.com/gocolly/colly"
+	"github.com/zvonler/espy/database"
 )
 
 type ForumScraper struct {
 	forumURL  *url.URL
-	db        *ScraperDB
-	Threads   []Thread
+	db        *database.ScraperDB
+	Threads   []XFThread
 	SubForums []*url.URL
 	collector *colly.Collector
 }
 
-func NewForumScraper(forumURL *url.URL, db *ScraperDB) *ForumScraper {
+func NewForumScraper(forumURL *url.URL, db *database.ScraperDB) *ForumScraper {
 	fs := new(ForumScraper)
-	fs.Threads = make([]Thread, 0)
+	fs.Threads = make([]XFThread, 0)
 	fs.collector = newCollectorWithCFRoundtripper()
 	fs.db = db
 
@@ -48,22 +49,22 @@ func NewForumScraper(forumURL *url.URL, db *ScraperDB) *ForumScraper {
 	})
 
 	fs.collector.OnHTML("div.mark-thread:not([class*=is-prefix])", func(e *colly.HTMLElement) {
-		temp := Thread{}
-		temp.Author = e.Attr("data-author")
+		temp := XFThread{}
+		temp.author = e.Attr("data-author")
 
 		e.ForEach("div.structItem-title", func(_ int, e *colly.HTMLElement) {
-			temp.Title = e.ChildText("a")
+			temp.title = e.ChildText("a")
 			if threadHref, err := url.Parse(e.ChildAttr("a", "href")); err == nil {
-				temp.URL = e.Request.URL.ResolveReference(threadHref)
+				temp.threadURL = e.Request.URL.ResolveReference(threadHref)
 			}
 		})
 
 		e.ForEach("li.structItem-startDate", func(_ int, e *colly.HTMLElement) {
 			dataTime := e.ChildAttr("time.u-dt", "data-time")
 			if tm, err := strconv.Atoi(dataTime); err != nil {
-				log.Printf("Unparseable data-time '%v' for %s", dataTime, temp.Title)
+				log.Printf("Unparseable data-time '%v' for %s", dataTime, temp.title)
 			} else {
-				temp.StartDate = time.Unix(int64(tm), 0)
+				temp.startDate = time.Unix(int64(tm), 0)
 			}
 		})
 
@@ -72,9 +73,9 @@ func NewForumScraper(forumURL *url.URL, db *ScraperDB) *ForumScraper {
 				dt := e.ChildText("dt")
 				dd := e.ChildText("dd")
 				if dt == "Replies" {
-					temp.Replies = parseCompactCount(dd)
+					temp.replies = parseCompactCount(dd)
 				} else if dt == "Views" {
-					temp.Views = parseCompactCount(dd)
+					temp.views = parseCompactCount(dd)
 				}
 			})
 		})
@@ -82,9 +83,9 @@ func NewForumScraper(forumURL *url.URL, db *ScraperDB) *ForumScraper {
 		e.ForEach("div.structItem-cell--latest", func(_ int, e *colly.HTMLElement) {
 			dataTime := e.ChildAttr("time.u-dt", "data-time")
 			if tm, err := strconv.Atoi(dataTime); err != nil {
-				log.Printf("Unparseable data-time '%v' for %s", dataTime, temp.Title)
+				log.Printf("Unparseable data-time '%v' for %s", dataTime, temp.title)
 			} else {
-				temp.Latest = time.Unix(int64(tm), 0)
+				temp.latest = time.Unix(int64(tm), 0)
 			}
 		})
 
@@ -109,7 +110,7 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 	time.Sleep(1 + time.Duration(rand.Intn(3))*time.Second)
 
 	if len(fs.Threads) > 0 {
-		for pageNum := 2; fs.Threads[len(fs.Threads)-1].Latest.After(cutoff); pageNum++ {
+		for pageNum := 2; fs.Threads[len(fs.Threads)-1].Latest().After(cutoff); pageNum++ {
 			time.Sleep(1 + time.Duration(rand.Intn(4))*time.Second)
 			next := fs.forumURL.JoinPath(fmt.Sprintf("page-%d", pageNum))
 			fs.collector.Visit(next.String())

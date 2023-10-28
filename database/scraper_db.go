@@ -1,4 +1,4 @@
-package xf_scraper
+package database
 
 import (
 	"database/sql"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/zvonler/espy/model"
 )
 
 type SiteID uint
@@ -96,16 +97,16 @@ func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId 
 	return
 }
 
-func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t Thread) (threadId ThreadID) {
+func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t model.Thread) (threadId ThreadID) {
 	tx, err := sdb.DB.Begin()
 	if err != nil {
 		log.Fatal(err)
 	}
-	authorId := sdb.getOrInsertAuthor(t.Author, siteId, tx)
+	authorId := sdb.getOrInsertAuthor(t.Author(), siteId, tx)
 
 	stmt := tx.Stmt(sdb.insertThreadStmt)
-	rows, err := stmt.Query(forumId, authorId, t.Title, t.URL.String(),
-		t.Replies, t.Views, t.Latest.Unix(), t.StartDate.Unix())
+	rows, err := stmt.Query(forumId, authorId, t.Title(), t.URL().String(),
+		t.Replies(), t.Views(), t.Latest().Unix(), t.StartDate().Unix())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -159,7 +160,7 @@ func (sdb *ScraperDB) getOrInsertAuthor(username string, siteId SiteID, tx *sql.
 	return
 }
 
-func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []Comment) {
+func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []model.Comment) {
 	if len(comments) == 0 {
 		return
 	}
@@ -170,8 +171,8 @@ func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []C
 	}
 
 	for _, comment := range comments {
-		authorId := sdb.getOrInsertAuthor(comment.Author, siteId, tx)
-		_, err := tx.Stmt(sdb.insertCommentStmt).Exec(threadId, authorId, comment.Published.Unix(), comment.Content)
+		authorId := sdb.getOrInsertAuthor(comment.Author(), siteId, tx)
+		_, err := tx.Stmt(sdb.insertCommentStmt).Exec(threadId, authorId, comment.Published().Unix(), comment.Content())
 		if err != nil {
 			log.Fatal(err)
 		}

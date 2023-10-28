@@ -11,13 +11,13 @@ import (
 )
 
 type ThreadPageFinder struct {
-	thread          Thread
+	thread          XFThread
 	pageNumFinder   *colly.Collector
 	earliestScraped time.Time
 	latestScraped   time.Time
 }
 
-func NewThreadPageFinder(t Thread) *ThreadPageFinder {
+func NewThreadPageFinder(t XFThread) *ThreadPageFinder {
 	tpf := new(ThreadPageFinder)
 	tpf.thread = t
 	tpf.pageNumFinder = newCollectorWithCFRoundtripper()
