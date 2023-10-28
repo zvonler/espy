@@ -1,13 +1,16 @@
 package reddit
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/turnage/graw/reddit"
+	"github.com/vartanbeno/go-reddit/v2/reddit"
 	"github.com/zvonler/espy/database"
 	"github.com/zvonler/espy/model"
 )
@@ -46,19 +49,37 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 	if !strings.HasPrefix(subreddit, "/r/") {
 		panic(subreddit)
 	}
+	subreddit = strings.TrimPrefix(subreddit, "/r/")
 
-	bot, err := reddit.NewBotFromAgentFile("reddit.agent", 0)
+	content, err := ioutil.ReadFile("reddit.agent")
 	if err != nil {
 		log.Fatal(err)
 	}
-	harvest, err := bot.Listing(subreddit, "")
+	var credentials reddit.Credentials
+	err = json.Unmarshal(content, &credentials)
+	if err != nil {
+		log.Fatal("Error unmarshaling JSON")
+	}
+
+	client, err := reddit.NewClient(credentials)
 	if err != nil {
 		fmt.Printf("Failed to fetch %s: %v\n", subreddit, err)
 		return
 	}
 
-	for _, post := range harvest.Posts {
-		threadScraper := NewThreadScraper(siteId, forumId, post, bot, fs.db)
+	posts, _, err := client.Subreddit.NewPosts(context.Background(), subreddit, &reddit.ListOptions{
+		Limit: 100,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, post := range posts {
+		postAndComments, _, err := client.Post.Get(context.Background(), post.ID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		threadScraper := NewThreadScraper(siteId, forumId, postAndComments, fs.db)
 		threadScraper.LoadCommentsSince(cutoff)
 	}
 
@@ -70,57 +91,62 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 type ThreadScraper struct {
 	siteId   database.SiteID
 	forumId  database.ForumID
-	post     *reddit.Post
-	bot      reddit.Bot
+	post     *reddit.PostAndComments
 	db       *database.ScraperDB
 	Comments []RedditComment
 }
 
-func NewThreadScraper(siteId database.SiteID, forumId database.ForumID, post *reddit.Post, bot reddit.Bot, db *database.ScraperDB) *ThreadScraper {
+func NewThreadScraper(siteId database.SiteID, forumId database.ForumID, post *reddit.PostAndComments, db *database.ScraperDB) *ThreadScraper {
 	ts := new(ThreadScraper)
 	ts.siteId = siteId
 	ts.forumId = forumId
 	ts.post = post
-	ts.bot = bot
 	ts.db = db
 	return ts
 }
 
 func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
-	permalink, err := url.Parse(ts.post.Permalink)
+	permalink, err := url.Parse(ts.post.Post.Permalink)
 	if err != nil {
 		log.Fatal(err)
 	}
 	thread := RedditThread{
 		Thread: model.Thread{
 			URL:       permalink,
-			Author:    ts.post.Author,
-			Title:     ts.post.Name,
-			StartDate: time.Unix(int64(ts.post.CreatedUTC), 0),
-			Replies:   uint(ts.post.NumComments),
+			Author:    ts.post.Post.Author,
+			Title:     ts.post.Post.Title,
+			StartDate: ts.post.Post.Created.Time,
+			Replies:   uint(ts.post.Post.NumberOfComments),
 		},
 	}
 	threadId := ts.db.InsertOrUpdateThread(ts.siteId, ts.forumId, thread.Thread)
 	fmt.Printf("ThreadScraper %d loading comments from %s\n", threadId, permalink)
 
-	post, err := ts.bot.Thread(ts.post.Permalink)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, comment := range post.Replies {
-		rc := RedditComment{
+	var toRc func(c *reddit.Comment)
+
+	toRc = func(c *reddit.Comment) {
+		ts.Comments = append(ts.Comments, RedditComment{
 			Comment: model.Comment{
-				Author:    comment.Author,
-				Published: time.Unix(int64(comment.CreatedUTC), 0),
-				Content:   comment.Body,
+				Author:    c.Author,
+				Published: c.Created.Time,
+				Content:   c.Body,
 			},
+		})
+
+		for _, r := range c.Replies.Comments {
+			toRc(r)
 		}
-		ts.Comments = append(ts.Comments, rc)
+	}
+
+	fmt.Printf("Adding %d top level comments\n", len(ts.post.Comments))
+	for _, comment := range ts.post.Comments {
+		toRc(comment)
 	}
 
 	comments := make([]model.Comment, len(ts.Comments), len(ts.Comments))
 	for i := range ts.Comments {
 		comments[i] = ts.Comments[i].Comment
 	}
+	fmt.Printf("Adding %d comments\n", len(comments))
 	ts.db.AddComments(ts.siteId, threadId, comments)
 }
