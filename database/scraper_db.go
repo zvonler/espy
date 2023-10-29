@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -49,10 +50,10 @@ func OpenScraperDB(path string) (sdb *ScraperDB, err error) {
 			sdb = new(ScraperDB)
 			sdb.Filename = path
 			sdb.DB = db
-			sdb.initSQLStatements()
 			if !existing_db {
 				sdb.initTables()
 			}
+			sdb.initSQLStatements()
 		}
 	}
 	return
@@ -75,6 +76,19 @@ func (sdb *ScraperDB) ForEachRowOrPanic(receiver RowsReceiver, stmt string, para
 	} else {
 		panic(err)
 	}
+}
+
+func (sdb *ScraperDB) ForSingleRowOrPanic(receiver RowsReceiver, stmt string, params ...any) {
+	var rowReceived bool
+	singleReceiver := func(rows *sql.Rows) bool {
+		if rowReceived {
+			panic(fmt.Sprintf("Received second row for %q", stmt))
+		}
+		receiver(rows)
+		rowReceived = true
+		return true
+	}
+	sdb.ForEachRowOrPanic(singleReceiver, stmt, params...)
 }
 
 func (sdb *ScraperDB) ExecOrPanic(stmt string, params ...any) {
