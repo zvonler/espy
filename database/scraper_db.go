@@ -23,14 +23,8 @@ type ThreadID uint
 type CommentID uint
 
 type ScraperDB struct {
-	Filename             string
-	DB                   *sql.DB
-	insertForumStmt      string
-	insertThreadStmt     string
-	insertSiteStmt       string
-	insertAuthorStmt     string
-	insertCommentStmt    string
-	commentTimeRangeStmt string
+	Filename string
+	DB       *sql.DB
 }
 
 func regex(re, s string) (bool, error) {
@@ -53,7 +47,6 @@ func OpenScraperDB(path string) (sdb *ScraperDB, err error) {
 			if !existing_db {
 				sdb.initTables()
 			}
-			sdb.initSQLStatements()
 		}
 	}
 	return
@@ -100,7 +93,14 @@ func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId 
 			func(rows *sql.Rows) {
 				err = rows.Scan(&forumId)
 			},
-			sdb.insertForumStmt, siteId, utils.TrimmedURL(url).String())
+			`INSERT INTO forum
+				(site_id, url)
+			VALUES
+				(?, ?)
+			ON CONFLICT
+				DO UPDATE SET url = url
+			RETURNING id`,
+			siteId, utils.TrimmedURL(url).String())
 	}
 	return
 }
@@ -111,7 +111,15 @@ func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t mod
 			func(rows *sql.Rows) {
 				err = rows.Scan(&threadId)
 			},
-			sdb.insertThreadStmt,
+			`INSERT INTO thread
+				(forum_id, author_id, title, url, replies, views, latest_activity, start_date)
+			VALUES
+				(?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT DO UPDATE SET
+				replies = excluded.replies,
+				views = excluded.views,
+				latest_activity = excluded.latest_activity
+			RETURNING id`,
 			forumId, authorId, t.Title,
 			utils.TrimmedURL(t.URL).String(), t.Replies,
 			t.Views, t.Latest.Unix(), t.StartDate.Unix())
@@ -144,7 +152,14 @@ func (sdb *ScraperDB) getOrInsertSite(hostname string) (id SiteID, err error) {
 		func(rows *sql.Rows) {
 			err = rows.Scan(&id)
 		},
-		sdb.insertSiteStmt, hostname)
+		`INSERT INTO site
+			(hostname)
+		VALUES
+			(?)
+		ON CONFLICT DO UPDATE SET
+			hostname = hostname
+		RETURNING id`,
+		hostname)
 	return
 }
 
@@ -153,7 +168,14 @@ func (sdb *ScraperDB) getOrInsertAuthor(username string, siteId SiteID) (id Auth
 		func(rows *sql.Rows) {
 			err = rows.Scan(&id)
 		},
-		sdb.insertAuthorStmt, siteId, username)
+		`INSERT INTO author
+			(site_id, username)
+		VALUES
+			(?, ?)
+		ON CONFLICT DO UPDATE SET
+			username = username
+		RETURNING id`,
+		siteId, username)
 	return
 }
 
@@ -163,7 +185,13 @@ func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []m
 		if err != nil {
 			log.Fatal(err)
 		}
-		sdb.ExecOrPanic(sdb.insertCommentStmt, threadId, authorId, comment.Published.Unix(), comment.Content)
+		sdb.ExecOrPanic(
+			`INSERT INTO comment
+				(thread_id, author_id, published, content)
+			VALUES
+				(?, ?, ?, ?)
+			ON CONFLICT DO NOTHING`,
+			threadId, authorId, comment.Published.Unix(), comment.Content)
 	}
 }
 
@@ -175,7 +203,8 @@ func (sdb *ScraperDB) CommentTimeRange(threadId ThreadID) (res []time.Time) {
 				res = []time.Time{time.Unix(int64(earliest), 0), time.Unix(int64(latest), 0)}
 			}
 		},
-		sdb.commentTimeRangeStmt, threadId)
+		`SELECT MIN(published), MAX(published) FROM COMMENT WHERE thread_id = ?`,
+		threadId)
 	return
 }
 
@@ -244,56 +273,6 @@ CREATE TABLE comment (
 		log.Printf("Error loading schema: %q\n", err)
 		return
 	}
-}
-
-func (sdb *ScraperDB) initSQLStatements() {
-	sdb.insertForumStmt = `
-		INSERT INTO forum
-			(site_id, url)
-		VALUES
-			(?, ?)
-		ON CONFLICT
-			DO UPDATE SET url = url
-		RETURNING id`
-
-	sdb.insertThreadStmt = `
-		INSERT INTO thread
-			(forum_id, author_id, title, url, replies, views, latest_activity, start_date)
-		VALUES
-			(?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT DO UPDATE SET
-			replies = excluded.replies,
-			views = excluded.views,
-			latest_activity = excluded.latest_activity
-		RETURNING id`
-
-	sdb.insertSiteStmt = `
-		INSERT INTO site
-			(hostname)
-		VALUES
-			(?)
-		ON CONFLICT DO UPDATE SET
-			hostname = hostname
-		RETURNING id`
-
-	sdb.insertAuthorStmt = `
-		INSERT INTO author
-			(site_id, username)
-		VALUES
-			(?, ?)
-		ON CONFLICT DO UPDATE SET
-			username = username
-		RETURNING id`
-
-	sdb.insertCommentStmt = `
-		INSERT INTO comment
-			(thread_id, author_id, published, content)
-		VALUES
-			(?, ?, ?, ?)
-		ON CONFLICT DO NOTHING`
-
-	sdb.commentTimeRangeStmt = `
-		SELECT MIN(published), MAX(published) FROM COMMENT WHERE thread_id = ?`
 }
 
 func exists(path string) (res bool, err error) {
