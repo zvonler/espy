@@ -94,7 +94,10 @@ func NewForumScraper(forumURL *url.URL, db *database.ScraperDB) *ForumScraper {
 }
 
 func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
-	siteId, forumId := fs.db.InsertOrUpdateForum(fs.forumURL)
+	siteId, forumId, err := fs.db.InsertOrUpdateForum(fs.forumURL)
+	if err != nil {
+		panic(err)
+	}
 
 	fs.collector.Visit(fs.forumURL.String())
 	time.Sleep(1 + time.Duration(rand.Intn(3))*time.Second)
@@ -107,7 +110,10 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 		}
 
 		for _, thread := range fs.Threads {
-			threadId := fs.db.InsertOrUpdateThread(siteId, forumId, thread.Thread)
+			threadId, err := fs.db.InsertOrUpdateThread(siteId, forumId, thread.Thread)
+			if err != nil {
+				panic(err)
+			}
 			ts := NewThreadScraper(threadId, thread, fs.db)
 			ts.LoadCommentsSince(cutoff)
 

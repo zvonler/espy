@@ -43,7 +43,10 @@ func NewForumScraper(url *url.URL, db *database.ScraperDB) *ForumScraper {
 }
 
 func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
-	siteId, forumId := fs.db.InsertOrUpdateForum(fs.forumURL)
+	siteId, forumId, err := fs.db.InsertOrUpdateForum(fs.forumURL)
+	if err != nil {
+		panic(err)
+	}
 
 	subreddit := fs.forumURL.Path
 	if !strings.HasPrefix(subreddit, "/r/") {
@@ -119,7 +122,10 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 			Replies:   uint(ts.post.Post.NumberOfComments),
 		},
 	}
-	threadId := ts.db.InsertOrUpdateThread(ts.siteId, ts.forumId, thread.Thread)
+	threadId, err := ts.db.InsertOrUpdateThread(ts.siteId, ts.forumId, thread.Thread)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Printf("ThreadScraper %d loading comments from %s\n", threadId, permalink)
 
 	var toRc func(c *reddit.Comment)

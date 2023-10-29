@@ -48,7 +48,7 @@ func runContentCommand(cmd *cobra.Command, args []string) {
 			panic(err)
 		}
 
-		stmt := `SELECT content FROM comment c WHERE c.thread_id = ?`
+		stmt := `SELECT content FROM comment c WHERE c.thread_id = ? ORDER BY published`
 		sdb.ForEachRowOrPanic(printRows, stmt, threadId)
 	} else {
 		url, err := url.Parse(args[0])
@@ -64,7 +64,8 @@ func runContentCommand(cmd *cobra.Command, args []string) {
 			FROM comment c, thread t
 			WHERE
 				    c.thread_id = t.id
-				AND t.url = ?`
+				AND t.url = ?
+			ORDER BY published`
 
 		sdb.ForEachRowOrPanic(printRows, stmt, url.String())
 	}
