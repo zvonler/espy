@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -16,4 +17,14 @@ func TrimmedURL(url *url.URL) *url.URL {
 		}
 	}
 	return url
+}
+
+func PathExists(path string) (res bool, err error) {
+	_, statErr := os.Stat(path)
+	if statErr == nil {
+		res = true
+	} else if !os.IsNotExist(statErr) {
+		err = statErr
+	}
+	return
 }

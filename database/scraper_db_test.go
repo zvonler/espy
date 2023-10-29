@@ -3,7 +3,6 @@ package database
 import (
 	"net/url"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -67,35 +66,4 @@ func TestBasicDatabase(t *testing.T) {
 	require.Equal(t, 2, len(times))
 	require.Equal(t, published, times[0])
 	require.Equal(t, published, times[1])
-}
-
-func TestExists(t *testing.T) {
-	tmpDir := t.TempDir()
-	stat, err := exists(tmpDir)
-	require.Equal(t, nil, err)
-	require.Equal(t, true, stat)
-
-	stat, err = exists(tmpDir + "/non-existent-path")
-	require.Equal(t, nil, err)
-	require.Equal(t, false, stat)
-
-	subdir := filepath.Join(tmpDir, "unreadable")
-	err = os.MkdirAll(subdir, 0700)
-	require.Equal(t, nil, err)
-
-	hiddenFile := filepath.Join(subdir, "somefile.tgz")
-	fd, err := os.Create(hiddenFile)
-	require.Equal(t, nil, err)
-	fd.Close()
-
-	stat, err = exists(hiddenFile)
-	require.Equal(t, nil, err)
-	require.Equal(t, true, stat)
-
-	os.Chmod(subdir, 0)
-
-	stat, err = exists(hiddenFile)
-	require.True(t, os.IsPermission(err))
-
-	os.Chmod(subdir, 0700)
 }

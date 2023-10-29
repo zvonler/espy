@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"os"
 	"regexp"
 	"time"
 
@@ -39,7 +38,7 @@ func OpenScraperDB(path string) (sdb *ScraperDB, err error) {
 			},
 		})
 
-	if existing_db, err := exists(path); err == nil {
+	if existing_db, err := utils.PathExists(path); err == nil {
 		if db, err := sql.Open("sqlite3_regex", path); err == nil {
 			sdb = new(ScraperDB)
 			sdb.Filename = path
@@ -273,14 +272,4 @@ CREATE TABLE comment (
 		log.Printf("Error loading schema: %q\n", err)
 		return
 	}
-}
-
-func exists(path string) (res bool, err error) {
-	_, statErr := os.Stat(path)
-	if statErr == nil {
-		res = true
-	} else if !os.IsNotExist(statErr) {
-		err = statErr
-	}
-	return
 }
