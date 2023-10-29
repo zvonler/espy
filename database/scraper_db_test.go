@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"net/url"
 	"os"
 	"testing"
@@ -50,6 +51,13 @@ func TestBasicDatabase(t *testing.T) {
 	require.Equal(t, nil, err)
 	require.Greater(t, threadId, ThreadID(0))
 
+	{
+		dbSiteId, dbThreadId, err := db.GetThreadByURL(threadUrl)
+		require.Equal(t, nil, err)
+		require.Equal(t, siteId, dbSiteId)
+		require.Equal(t, dbThreadId, threadId)
+	}
+
 	require.Equal(t, []time.Time(nil), db.CommentTimeRange(threadId))
 
 	author := "somebody"
@@ -60,10 +68,36 @@ func TestBasicDatabase(t *testing.T) {
 		Published: published,
 		Content:   commentBody,
 	}
-	db.AddComments(siteId, threadId, []model.Comment{comment})
+	err = db.AddComments(siteId, threadId, []model.Comment{comment})
+	require.Equal(t, nil, err)
 
 	times := db.CommentTimeRange(threadId)
 	require.Equal(t, 2, len(times))
 	require.Equal(t, published, times[0])
 	require.Equal(t, published, times[1])
+
+	scrapeTime := time.Now().Truncate(time.Second)
+	db.SetForumLastScraped(forumId, scrapeTime)
+	tm, err := db.GetForumLastScraped(forumId)
+	require.Equal(t, err, nil)
+	require.Equal(t, scrapeTime, tm)
+
+	// Confirm regex support
+	var found bool
+	db.ForSingleRowOrPanic(
+		func(rows *sql.Rows) {
+			var dbAuthor string
+			var dbPublished int64
+			var dbBody string
+			rows.Scan(&dbAuthor, &dbPublished, &dbBody)
+			require.Equal(t, author, dbAuthor)
+			require.Equal(t, published, time.Unix(dbPublished, 0))
+			require.Equal(t, commentBody, dbBody)
+			found = true
+		},
+		"SELECT a.username, c.published, c.content FROM comment c, author a WHERE "+
+			"a.username REGEXP ? "+
+			"AND a.id = c.author_id",
+		"^somebody$")
+	require.True(t, found)
 }

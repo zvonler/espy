@@ -178,11 +178,11 @@ func (sdb *ScraperDB) getOrInsertAuthor(username string, siteId SiteID) (id Auth
 	return
 }
 
-func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []model.Comment) {
+func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []model.Comment) (err error) {
 	for _, comment := range comments {
-		authorId, err := sdb.getOrInsertAuthor(comment.Author, siteId)
-		if err != nil {
-			log.Fatal(err)
+		var authorId AuthorID
+		if authorId, err = sdb.getOrInsertAuthor(comment.Author, siteId); err != nil {
+			break
 		}
 		sdb.ExecOrPanic(
 			`INSERT INTO comment
@@ -192,6 +192,7 @@ func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []m
 			ON CONFLICT DO NOTHING`,
 			threadId, authorId, comment.Published.Unix(), comment.Content)
 	}
+	return
 }
 
 func (sdb *ScraperDB) CommentTimeRange(threadId ThreadID) (res []time.Time) {
@@ -221,6 +222,18 @@ func (sdb *ScraperDB) FirstCommentLoaded(threadId ThreadID) (res bool) {
 
 func (sdb *ScraperDB) SetForumLastScraped(forumId ForumID, time time.Time) {
 	sdb.ExecOrPanic("UPDATE forum SET last_scraped = ? WHERE id = ?", time.Unix(), forumId)
+}
+
+func (sdb *ScraperDB) GetForumLastScraped(forumId ForumID) (tm time.Time, err error) {
+	sdb.ForSingleRowOrPanic(
+		func(rows *sql.Rows) {
+			var epochSecs int64
+			err = rows.Scan(&epochSecs)
+			tm = time.Unix(epochSecs, 0)
+		},
+		"SELECT last_scraped FROM forum WHERE id = ?",
+		forumId)
+	return
 }
 
 func (sdb *ScraperDB) initTables() {
