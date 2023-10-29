@@ -63,15 +63,13 @@ func (sdb *ScraperDB) Close() {
 	sdb.DB.Close()
 }
 
-type RowsReceiver func(*sql.Rows) bool
+type RowsReceiver func(*sql.Rows)
 
 func (sdb *ScraperDB) ForEachRowOrPanic(receiver RowsReceiver, stmt string, params ...any) {
 	if rows, err := sdb.DB.Query(stmt, params...); err == nil {
 		defer rows.Close()
 		for rows.Next() {
-			if !receiver(rows) {
-				break
-			}
+			receiver(rows)
 		}
 	} else {
 		panic(err)
@@ -80,13 +78,12 @@ func (sdb *ScraperDB) ForEachRowOrPanic(receiver RowsReceiver, stmt string, para
 
 func (sdb *ScraperDB) ForSingleRowOrPanic(receiver RowsReceiver, stmt string, params ...any) {
 	var rowReceived bool
-	singleReceiver := func(rows *sql.Rows) bool {
+	singleReceiver := func(rows *sql.Rows) {
 		if rowReceived {
 			panic(fmt.Sprintf("Received second row for %q", stmt))
 		}
 		receiver(rows)
 		rowReceived = true
-		return true
 	}
 	sdb.ForEachRowOrPanic(singleReceiver, stmt, params...)
 }
@@ -100,9 +97,8 @@ func (sdb *ScraperDB) ExecOrPanic(stmt string, params ...any) {
 func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId ForumID, err error) {
 	if siteId, err = sdb.getOrInsertSite(url.Hostname()); err == nil {
 		sdb.ForSingleRowOrPanic(
-			func(rows *sql.Rows) bool {
+			func(rows *sql.Rows) {
 				err = rows.Scan(&forumId)
-				return true
 			},
 			sdb.insertForumStmt, siteId, utils.TrimmedURL(url).String())
 	}
@@ -112,9 +108,8 @@ func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId 
 func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t model.Thread) (threadId ThreadID, err error) {
 	if authorId, err := sdb.getOrInsertAuthor(t.Author, siteId); err == nil {
 		sdb.ForSingleRowOrPanic(
-			func(rows *sql.Rows) bool {
+			func(rows *sql.Rows) {
 				err = rows.Scan(&threadId)
-				return true
 			},
 			sdb.insertThreadStmt,
 			forumId, authorId, t.Title,
@@ -135,23 +130,19 @@ func (sdb *ScraperDB) GetThreadByURL(url *url.URL) (siteId SiteID, threadId Thre
 			AND f.id = t.forum_id
 			AND t.url = ?`
 
-	var rows *sql.Rows
-	if rows, err = sdb.DB.Query(stmt, utils.TrimmedURL(url).String()); err == nil {
-		defer rows.Close()
-		if rows.Next() {
+	err = errors.New("Not found") // rows.Scan will reset this if a row is found
+	sdb.ForSingleRowOrPanic(
+		func(rows *sql.Rows) {
 			err = rows.Scan(&siteId, &threadId)
-		} else {
-			err = errors.New("Not found")
-		}
-	}
+		},
+		stmt, utils.TrimmedURL(url).String())
 	return
 }
 
 func (sdb *ScraperDB) getOrInsertSite(hostname string) (id SiteID, err error) {
 	sdb.ForSingleRowOrPanic(
-		func(rows *sql.Rows) bool {
+		func(rows *sql.Rows) {
 			err = rows.Scan(&id)
-			return true
 		},
 		sdb.insertSiteStmt, hostname)
 	return
@@ -159,19 +150,14 @@ func (sdb *ScraperDB) getOrInsertSite(hostname string) (id SiteID, err error) {
 
 func (sdb *ScraperDB) getOrInsertAuthor(username string, siteId SiteID) (id AuthorID, err error) {
 	sdb.ForSingleRowOrPanic(
-		func(rows *sql.Rows) bool {
+		func(rows *sql.Rows) {
 			err = rows.Scan(&id)
-			return true
 		},
 		sdb.insertAuthorStmt, siteId, username)
 	return
 }
 
 func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []model.Comment) {
-	if len(comments) == 0 {
-		return
-	}
-
 	for _, comment := range comments {
 		authorId, err := sdb.getOrInsertAuthor(comment.Author, siteId)
 		if err != nil {
@@ -183,28 +169,26 @@ func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []m
 
 func (sdb *ScraperDB) CommentTimeRange(threadId ThreadID) (res []time.Time) {
 	sdb.ForSingleRowOrPanic(
-		func(rows *sql.Rows) bool {
+		func(rows *sql.Rows) {
 			var earliest, latest uint
 			if err := rows.Scan(&earliest, &latest); err == nil {
 				res = []time.Time{time.Unix(int64(earliest), 0), time.Unix(int64(latest), 0)}
 			}
-			return true
 		},
 		sdb.commentTimeRangeStmt, threadId)
 	return
 }
 
-func (sdb *ScraperDB) FirstCommentLoaded(threadId ThreadID) bool {
-	sql := `
-		SELECT MIN(published) FROM comment WHERE thread_id = ?
+func (sdb *ScraperDB) FirstCommentLoaded(threadId ThreadID) (res bool) {
+	sdb.ForSingleRowOrPanic(
+		func(rows *sql.Rows) {
+			res = true
+		},
+		`SELECT MIN(published) FROM comment WHERE thread_id = ?
 			INTERSECT
-		SELECT start_date FROM thread WHERE id = ?`
-	rows, err := sdb.DB.Query(sql, threadId, threadId)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-	return rows.Next()
+		SELECT start_date FROM thread WHERE id = ?`,
+		threadId, threadId)
+	return
 }
 
 func (sdb *ScraperDB) SetForumLastScraped(forumId ForumID, time time.Time) {

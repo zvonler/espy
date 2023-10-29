@@ -46,13 +46,12 @@ func runGrepCommand(cmd *cobra.Command, args []string) {
 	}
 
 	sdb.ForEachRowOrPanic(
-		func(rows *sql.Rows) bool {
+		func(rows *sql.Rows) {
 			var id uint
 			var title string
 			var URL string
 			rows.Scan(&id, &title, &URL)
 			fmt.Printf("Thread %d: %q (%s)\n", id, title, URL)
-			return true
 		},
 		stmt, anyArgs...)
 }

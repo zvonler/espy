@@ -33,11 +33,10 @@ func runContentCommand(cmd *cobra.Command, args []string) {
 	}
 	defer sdb.Close()
 
-	printRows := func(rows *sql.Rows) bool {
+	printRows := func(rows *sql.Rows) {
 		var content string
 		rows.Scan(&content)
 		fmt.Println(content)
-		return true
 	}
 
 	var digitCheck = regexp.MustCompile(`^[0-9]+$`)
