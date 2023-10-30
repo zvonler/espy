@@ -55,3 +55,20 @@ func TestExists(t *testing.T) {
 
 	os.Chmod(subdir, 0700)
 }
+
+func TestParseURLOrID(t *testing.T) {
+	var url *url.URL
+	var id uint
+	var err error
+
+	url, id, err = ParseURLOrID("1")
+	require.Nil(t, err)
+	require.Nil(t, url)
+	require.Equal(t, uint(1), id)
+
+	forumUrl := "https://some-forum.com/"
+	url, id, err = ParseURLOrID(forumUrl)
+	require.Nil(t, err)
+	require.Equal(t, forumUrl, url.String())
+	require.Equal(t, uint(0), id)
+}

@@ -21,6 +21,7 @@ func NewCommand() *cobra.Command {
 
 	threadCommand.AddCommand(initContentCommand())
 	threadCommand.AddCommand(initGrepCommand())
+	threadCommand.AddCommand(initParticipantsCommand())
 	threadCommand.AddCommand(initPresentCommand())
 
 	return threadCommand

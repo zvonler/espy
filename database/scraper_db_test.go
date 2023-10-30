@@ -60,6 +60,9 @@ func TestBasicDatabase(t *testing.T) {
 
 	require.Equal(t, []time.Time(nil), db.CommentTimeRange(threadId))
 
+	commentUrl, err := url.Parse("https://some-forum.com/forums/name.123/thread-xyz/comments/foo")
+	require.Equal(t, nil, err)
+
 	author := "somebody"
 	published := time.Unix(123456789, 0)
 	commentBody := "Some text"
@@ -67,6 +70,7 @@ func TestBasicDatabase(t *testing.T) {
 		Author:    author,
 		Published: published,
 		Content:   commentBody,
+		URL:       commentUrl,
 	}
 	err = db.AddComments(siteId, threadId, []model.Comment{comment})
 	require.Equal(t, nil, err)

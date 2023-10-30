@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -25,6 +27,18 @@ func PathExists(path string) (res bool, err error) {
 		res = true
 	} else if !os.IsNotExist(statErr) {
 		err = statErr
+	}
+	return
+}
+
+func ParseURLOrID(arg string) (url *url.URL, id uint, err error) {
+	var digitCheck = regexp.MustCompile(`^[0-9]+$`)
+	if digitCheck.MatchString(arg) {
+		if val, err := strconv.Atoi(arg); err == nil {
+			id = uint(val)
+		}
+	} else {
+		url, err = url.Parse(arg)
 	}
 	return
 }

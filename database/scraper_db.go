@@ -205,6 +205,86 @@ func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []m
 	return
 }
 
+// Finds a thread in the database by either URL or ID.
+func (sdb *ScraperDB) FindThread(arg string) (threadId ThreadID, err error) {
+	if url, id, err := utils.ParseURLOrID(arg); err == nil {
+		if url != nil {
+			if _, dbId, err := sdb.GetThreadByURL(url); err == nil {
+				threadId = ThreadID(dbId)
+			}
+		} else {
+			threadId = ThreadID(id)
+		}
+	}
+	return
+}
+
+func (sdb *ScraperDB) ThreadComments(threadId ThreadID) (comments []model.Comment, err error) {
+	stmt := `
+		SELECT
+			c.url, a.username, c.published, c.content
+		FROM author a, comment c, thread t
+		WHERE
+				a.id = c.author_id
+			AND c.thread_id = t.id
+			AND t.id = ?
+		ORDER BY published`
+
+	sdb.ForEachRowOrPanic(
+		func(rows *sql.Rows) {
+			var urlStr string
+			var username string
+			var published uint
+			var content string
+			err = rows.Scan(&urlStr, &username, &published, &content)
+			if err != nil {
+				panic(err)
+			}
+			url, _ := url.Parse(urlStr)
+			comments = append(comments,
+				model.Comment{
+					URL:       url,
+					Author:    username,
+					Published: time.Unix(int64(published), 0),
+					Content:   content,
+				})
+		}, stmt, threadId)
+
+	return
+}
+
+func (sdb *ScraperDB) ThreadParticipants(threadId ThreadID) (usernames []string, err error) {
+	stmt := `
+		SELECT DISTINCT
+			username
+		FROM author a, comment c, thread t
+		WHERE
+				a.id = c.author_id
+			AND c.thread_id = t.id
+			AND t.id = ?
+		ORDER BY published`
+
+	usernameSet := make(map[string]bool)
+
+	sdb.ForEachRowOrPanic(
+		func(rows *sql.Rows) {
+			var username string
+			err = rows.Scan(&username)
+			if err != nil {
+				panic(err)
+			}
+			usernameSet[username] = true
+		}, stmt, threadId)
+
+	usernames = make([]string, len(usernameSet))
+	i := 0
+	for username, _ := range usernameSet {
+		usernames[i] = username
+		i++
+	}
+	return
+}
+
 func (sdb *ScraperDB) CommentTimeRange(threadId ThreadID) (res []time.Time) {
 	sdb.ForSingleRowOrPanic(
 		func(rows *sql.Rows) {
