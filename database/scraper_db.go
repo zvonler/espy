@@ -126,6 +126,16 @@ func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t mod
 	return
 }
 
+func (sdb *ScraperDB) GetSiteId(host string) (siteId SiteID, err error) {
+	stmt := `SELECT id FROM site WHERE hostname = ?`
+	sdb.ForSingleRowOrPanic(
+		func(rows *sql.Rows) {
+			err = rows.Scan(&siteId)
+		},
+		stmt, host)
+	return
+}
+
 func (sdb *ScraperDB) GetThreadByURL(url *url.URL) (siteId SiteID, threadId ThreadID, err error) {
 	stmt := `
 		SELECT
