@@ -196,11 +196,11 @@ func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []m
 		}
 		sdb.ExecOrPanic(
 			`INSERT INTO comment
-				(thread_id, author_id, published, content)
+				(thread_id, url, author_id, published, content)
 			VALUES
-				(?, ?, ?, ?)
+				(?, ?, ?, ?, ?)
 			ON CONFLICT DO NOTHING`,
-			threadId, authorId, comment.Published.Unix(), comment.Content)
+			threadId, comment.URL.String(), authorId, comment.Published.Unix(), comment.Content)
 	}
 	return
 }
@@ -282,6 +282,7 @@ CREATE TABLE thread (
 
 CREATE TABLE comment (
 	id integer not null primary key,
+	url TEXT UNIQUE,
 	thread_id INTEGER NOT NULL,
 	author_id INTEGER NOT NULL,
 	published INTEGER,

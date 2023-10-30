@@ -16,6 +16,7 @@ type Thread struct {
 }
 
 type Comment struct {
+	URL       *url.URL
 	Author    string
 	Published time.Time
 	Content   string

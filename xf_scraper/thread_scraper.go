@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -120,6 +121,11 @@ func NewThreadScraper(threadId database.ThreadID, thread XFThread, db *database.
 		temp.Content = strings.TrimRight(temp.Content, "\n")
 
 		e.ForEach("ul.message-attribution-main", func(_ int, e *colly.HTMLElement) {
+			commentHref, err := url.Parse(e.ChildAttr("a", "href"))
+			if err != nil {
+				panic(err)
+			}
+			temp.URL = e.Request.URL.ResolveReference(commentHref)
 			dataTime := e.ChildAttr("time.u-dt", "data-time")
 			if tm, err := strconv.Atoi(dataTime); err != nil {
 				log.Printf("Unparseable data-time '%v' for %s", dataTime, temp.Author)
@@ -170,15 +176,16 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 			}
 		}
 
-		// Binary search to page containing posts older than earliest then load if before cutoff
+		// Check if user has requested a backfill
 		if cutoff.Before(earliest) {
-
 			// If we already have the first comment of the thread, don't look for more
 			if !ts.db.FirstCommentLoaded(ts.threadId) {
 
 				// Loading the first page of the thread gets us the last page number
 				ts.pageNumScraper.Visit(ts.thread.URL.String())
 				time.Sleep(1 + time.Duration(rand.Intn(2))*time.Second)
+
+				// Binary search to page containing posts older than earliest then load if before cutoff
 				tpf := NewThreadPageFinder(ts.thread)
 				for pageNum := tpf.FindCommentsBefore(earliest, ts.pages); pageNum >= 1; pageNum-- {
 					time.Sleep(1 + time.Duration(rand.Intn(4))*time.Second)

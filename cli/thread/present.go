@@ -55,13 +55,14 @@ func runPresentCommand(cmd *cobra.Command, args []string) {
 	}
 
 	printRows := func(rows *sql.Rows) {
+		var url string
 		var username string
 		var content string
-		rows.Scan(&username, &content)
-		fmt.Printf("%s: %q\n", username, content)
+		rows.Scan(&url, &username, &content)
+		fmt.Printf("%s\n%s: %q\n", url, username, content)
 		fmt.Println("--------")
 	}
 
-	stmt := `SELECT username, content FROM comment c, author a WHERE a.id = c.author_id AND c.thread_id = ? ORDER BY published`
+	stmt := `SELECT c.url, a.username, c.content FROM comment c, author a WHERE a.id = c.author_id AND c.thread_id = ? ORDER BY published`
 	sdb.ForEachRowOrPanic(printRows, stmt, threadId)
 }

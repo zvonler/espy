@@ -131,8 +131,13 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 	var toRc func(c *reddit.Comment)
 
 	toRc = func(c *reddit.Comment) {
+		permalink, err := url.Parse("https://reddit.com" + c.Permalink)
+		if err != nil {
+			log.Fatal(err)
+		}
 		ts.Comments = append(ts.Comments, RedditComment{
 			Comment: model.Comment{
+				URL:       permalink,
 				Author:    c.Author,
 				Published: c.Created.Time,
 				Content:   c.Body,
