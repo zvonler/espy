@@ -54,7 +54,7 @@ func runScrapeCommand(cmd *cobra.Command, args []string) {
 		fs.LoadThreadsWithActivitySince(cutoff)
 	} else if strings.Contains(url.Path, "/forums/") {
 		fs := xf_scraper.NewForumScraper(url, sdb)
-		fs.LoadThreadsWithActivitySince(cutoff)
+		fs.LoadThreadsWithActivitySince(cutoff, true)
 	} else if strings.Contains(url.Path, "/threads/") {
 		// If url already in thread table, create ThreadScraper
 		if siteId, threadId, err := sdb.GetThreadByURL(url); err == nil {

@@ -93,7 +93,7 @@ func NewForumScraper(forumURL *url.URL, db *database.ScraperDB) *ForumScraper {
 	return fs
 }
 
-func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
+func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time, subthreads bool) {
 	siteId, forumId, err := fs.db.InsertOrUpdateForum(fs.forumURL)
 	if err != nil {
 		panic(err)
@@ -125,10 +125,10 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 		}
 	}
 
-	if len(fs.SubForums) > 0 {
+	if subthreads && len(fs.SubForums) > 0 {
 		for _, subForumURL := range fs.SubForums {
 			sfs := NewForumScraper(subForumURL, fs.db)
-			sfs.LoadThreadsWithActivitySince(cutoff)
+			sfs.LoadThreadsWithActivitySince(cutoff, subthreads)
 		}
 	}
 

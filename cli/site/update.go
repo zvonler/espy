@@ -2,6 +2,7 @@ package site
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/url"
 	"regexp"
@@ -73,13 +74,14 @@ func runUpdateCommand(cmd *cobra.Command, args []string) {
 		},
 		stmt, siteId)
 
-	for _, url := range urls {
+	for i, url := range urls {
+		fmt.Printf("%d: %s\n", i, url)
 		if strings.Contains(url.Host, "reddit.com") {
 			fs := reddit.NewForumScraper(url, sdb)
 			fs.LoadThreadsWithActivitySince(cutoff)
 		} else if strings.Contains(url.Path, "/forums/") {
 			fs := xf_scraper.NewForumScraper(url, sdb)
-			fs.LoadThreadsWithActivitySince(cutoff)
+			fs.LoadThreadsWithActivitySince(cutoff, false)
 		}
 	}
 }
