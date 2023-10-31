@@ -1,4 +1,4 @@
-package forum
+package thread
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 func initListCommand() *cobra.Command {
 	listCommand := &cobra.Command{
 		Use:   "list",
-		Short: "Lists forums in the database",
+		Short: "Lists threads in the database",
 		Run:   runListCommand,
 	}
 
@@ -27,11 +27,11 @@ func runListCommand(cmd *cobra.Command, args []string) {
 	}
 	defer sdb.Close()
 
-	if forumsByUrl, err := sdb.GetForums(); err == nil {
-		colWidth := uint(math.Round(math.Ceil(math.Log10(float64(len(forumsByUrl))))))
-		fmtString := fmt.Sprintf("%%0%dd: %%s\n", colWidth)
-		for id, url := range forumsByUrl {
-			fmt.Printf(fmtString, id, url)
+	if threadsById, err := sdb.GetThreads(); err == nil {
+		colWidth := uint(math.Round(math.Ceil(math.Log10(float64(len(threadsById))))))
+		fmtString := fmt.Sprintf("%%0%dd: %%s (%%s)\n", colWidth)
+		for id, thread := range threadsById {
+			fmt.Printf(fmtString, id, thread.Title, thread.URL)
 		}
 	}
 

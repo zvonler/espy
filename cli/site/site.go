@@ -14,6 +14,7 @@ func NewCommand() *cobra.Command {
 		Short: "Commands for working with sites",
 	}
 
+	siteCommand.AddCommand(initListCommand())
 	siteCommand.AddCommand(initUpdateCommand())
 
 	return siteCommand

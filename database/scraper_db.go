@@ -205,6 +205,79 @@ func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []m
 	return
 }
 
+func (sdb *ScraperDB) GetForums() (forumsById map[ForumID]*url.URL, err error) {
+	stmt := `SELECT id, url FROM forum`
+
+	forumsById = make(map[ForumID]*url.URL)
+	sdb.ForEachRowOrPanic(
+		func(rows *sql.Rows) {
+			var id uint
+			var urlStr string
+			rows.Scan(&id, &urlStr)
+			if url, err := url.Parse(urlStr); err == nil {
+				forumsById[ForumID(id)] = url
+			} else {
+				panic(err)
+			}
+		},
+		stmt)
+	return
+}
+
+func (sdb *ScraperDB) GetSites() (hostnamesById map[SiteID]string, err error) {
+	stmt := "SELECT id, hostname FROM site"
+	hostnamesById = make(map[SiteID]string)
+	sdb.ForEachRowOrPanic(
+		func(rows *sql.Rows) {
+			var id uint
+			var hostname string
+			rows.Scan(&id, &hostname)
+			hostnamesById[SiteID(id)] = hostname
+		},
+		stmt)
+	return
+}
+
+func (sdb *ScraperDB) GetThreads() (threadsById map[ThreadID]model.Thread, err error) {
+	stmt := `
+		SELECT
+			t.id, t.url, t.title, a.username, t.start_date, t.latest_activity, t.replies, t.views
+		FROM thread t, author a
+		WHERE
+			a.id = t.author_id`
+
+	threadsById = make(map[ThreadID]model.Thread)
+	sdb.ForEachRowOrPanic(
+		func(rows *sql.Rows) {
+			var id uint
+			var urlStr string
+			var title string
+			var username string
+			var startDate int64
+			var latest int64
+			var replies uint
+			var views uint
+
+			rows.Scan(&id, &urlStr, &title, &username, &startDate, &latest, &replies, &views)
+			if url, err := url.Parse(urlStr); err == nil {
+				threadsById[ThreadID(id)] =
+					model.Thread{
+						URL:       url,
+						Title:     title,
+						Author:    username,
+						StartDate: time.Unix(startDate, 0),
+						Latest:    time.Unix(latest, 0),
+						Replies:   replies,
+						Views:     views,
+					}
+			} else {
+				panic(err)
+			}
+		},
+		stmt)
+	return
+}
+
 // Finds a thread in the database by either URL or ID.
 func (sdb *ScraperDB) FindThread(arg string) (threadId ThreadID, err error) {
 	if url, id, err := utils.ParseURLOrID(arg); err == nil {

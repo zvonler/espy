@@ -1,4 +1,4 @@
-package forum
+package site
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 func initListCommand() *cobra.Command {
 	listCommand := &cobra.Command{
 		Use:   "list",
-		Short: "Lists forums in the database",
+		Short: "Lists sites in the database",
 		Run:   runListCommand,
 	}
 
@@ -27,11 +27,11 @@ func runListCommand(cmd *cobra.Command, args []string) {
 	}
 	defer sdb.Close()
 
-	if forumsByUrl, err := sdb.GetForums(); err == nil {
-		colWidth := uint(math.Round(math.Ceil(math.Log10(float64(len(forumsByUrl))))))
+	if sitesById, err := sdb.GetSites(); err == nil {
+		colWidth := uint(math.Round(math.Ceil(math.Log10(float64(len(sitesById))))))
 		fmtString := fmt.Sprintf("%%0%dd: %%s\n", colWidth)
-		for id, url := range forumsByUrl {
-			fmt.Printf(fmtString, id, url)
+		for id, hostname := range sitesById {
+			fmt.Printf(fmtString, id, hostname)
 		}
 	}
 
