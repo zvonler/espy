@@ -20,6 +20,7 @@ type ForumID uint
 type AuthorID uint
 type ThreadID uint
 type CommentID uint
+type TagID uint
 
 type ScraperDB struct {
 	Filename string
@@ -238,7 +239,14 @@ func (sdb *ScraperDB) GetSites() (hostnamesById map[SiteID]string, err error) {
 	return
 }
 
-func (sdb *ScraperDB) GetThreads() (threadsById map[ThreadID]model.Thread, err error) {
+func (sdb *ScraperDB) GetThread(threadId ThreadID) (t model.Thread, err error) {
+	if byId, err := sdb.GetThreads([]ThreadID{threadId}); err == nil {
+		t = byId[threadId]
+	}
+	return
+}
+
+func (sdb *ScraperDB) GetThreads(threadIds []ThreadID) (threadsById map[ThreadID]model.Thread, err error) {
 	stmt := `
 		SELECT
 			t.id, t.url, t.title, a.username, t.start_date, t.latest_activity, t.replies, t.views
@@ -323,6 +331,51 @@ func (sdb *ScraperDB) ThreadComments(threadId ThreadID) (comments []model.Commen
 				})
 		}, stmt, threadId)
 
+	return
+}
+
+func (sdb *ScraperDB) getOrInsertTagId(tag string) (id TagID, err error) {
+	sdb.ForSingleRowOrPanic(
+		func(rows *sql.Rows) {
+			err = rows.Scan(&id)
+		},
+		`INSERT INTO tag
+			(name)
+		VALUES
+			(?)
+		ON CONFLICT DO UPDATE SET
+			name = name
+		RETURNING id`,
+		tag)
+	return
+}
+
+func (sdb *ScraperDB) AddThreadTags(threadId ThreadID, tags []string) (err error) {
+	for _, tag := range tags {
+		if tagId, err := sdb.getOrInsertTagId(tag); err == nil {
+			stmt := `
+				INSERT INTO thread_tag
+					(thread_id, tag_id)
+				VALUES
+					(?, ?)
+				ON CONFLICT DO NOTHING`
+			sdb.ExecOrPanic(stmt, threadId, tagId)
+		} else {
+			break
+		}
+	}
+	return
+}
+
+func (sdb *ScraperDB) RemoveThreadTags(threadId ThreadID, tags []string) (err error) {
+	for _, tag := range tags {
+		if tagId, err := sdb.getOrInsertTagId(tag); err == nil {
+			stmt := "DELETE FROM thread_tag WHERE thread_id = ? AND tag_id = ?"
+			sdb.ExecOrPanic(stmt, threadId, tagId)
+		} else {
+			break
+		}
+	}
 	return
 }
 
@@ -434,7 +487,7 @@ CREATE TABLE thread (
 );
 
 CREATE TABLE comment (
-	id integer not null primary key,
+	id INTEGER NOT NULL PRIMARY KEY,
 	url TEXT UNIQUE,
 	thread_id INTEGER NOT NULL,
 	author_id INTEGER NOT NULL,
@@ -442,6 +495,18 @@ CREATE TABLE comment (
 	content TEXT,
 
 	UNIQUE(thread_id, author_id, published)
+);
+
+CREATE TABLE thread_tag (
+	thread_id INTEGER NOT NULL,
+	tag_id INTEGER NOT NULL,
+
+	UNIQUE(thread_id, tag_id)
+);
+
+CREATE TABLE tag (
+	id INTEGER NOT NULL PRIMARY KEY,
+	name TEXT UNIQUE
 );
 `
 	_, err := sdb.DB.Exec(schema)

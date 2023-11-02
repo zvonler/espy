@@ -27,7 +27,7 @@ func runListCommand(cmd *cobra.Command, args []string) {
 	}
 	defer sdb.Close()
 
-	if threadsById, err := sdb.GetThreads(); err == nil {
+	if threadsById, err := sdb.GetThreads([]database.ThreadID{}); err == nil {
 		colWidth := uint(math.Round(math.Ceil(math.Log10(float64(len(threadsById))))))
 		fmtString := fmt.Sprintf("%%0%dd: %%s (%%s)\n", colWidth)
 		for id, thread := range threadsById {
