@@ -105,6 +105,31 @@ func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId 
 	return
 }
 
+func (sdb *ScraperDB) FindAuthorComments(username string) (comments []model.Comment, err error) {
+	sdb.ForEachRowOrPanic(
+		func(rows *sql.Rows) {
+			var urlStr string
+			var published int64
+			var content string
+			if err = rows.Scan(&urlStr, &published, &content); err == nil {
+				if url, err := url.Parse(urlStr); err == nil {
+					comments = append(comments, model.Comment{url, username, time.Unix(published, 0), content})
+				}
+			}
+			if err != nil {
+				panic(err)
+			}
+		},
+		`SELECT
+			url, published, content
+		FROM comment c
+		WHERE
+			c.author_id IN (SELECT id FROM author WHERE username = ?)`,
+		username)
+
+	return
+}
+
 func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t model.Thread) (threadId ThreadID, err error) {
 	if authorId, err := sdb.getOrInsertAuthor(t.Author, siteId); err == nil {
 		sdb.ForSingleRowOrPanic(

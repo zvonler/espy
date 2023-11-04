@@ -15,6 +15,7 @@ func NewCommand() *cobra.Command {
 			"  " + os.Args[0] + " author grep Cybertruck",
 	}
 
+	authorCommand.AddCommand(initContentCommand())
 	authorCommand.AddCommand(initIntersectCommand())
 
 	return authorCommand
