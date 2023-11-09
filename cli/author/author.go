@@ -16,6 +16,7 @@ func NewCommand() *cobra.Command {
 	}
 
 	authorCommand.AddCommand(initContentCommand())
+	authorCommand.AddCommand(initGrepCommand())
 	authorCommand.AddCommand(initIntersectCommand())
 
 	return authorCommand

@@ -28,6 +28,7 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/robertkrimen/otto v0.2.1 // indirect
+	github.com/ryanuber/columnize v2.1.2+incompatible // indirect
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/temoto/robotstxt v1.1.2 // indirect
