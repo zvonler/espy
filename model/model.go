@@ -14,6 +14,7 @@ type TagID uint
 
 type Thread struct {
 	Id        ThreadID
+	SiteId    SiteID
 	URL       *url.URL
 	Title     string
 	Author    string

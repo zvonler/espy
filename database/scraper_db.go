@@ -155,14 +155,16 @@ func (sdb *ScraperDB) GetSiteId(host string) (siteId model.SiteID, err error) {
 	return
 }
 
-func (sdb *ScraperDB) GetThreadById(threadId model.ThreadID) (thread model.Thread, err error) {
+func (sdb *ScraperDB) GetThreadById(threadId model.ThreadID) (t model.Thread, err error) {
 	stmt := `
 		SELECT
-			t.url, t.title, a.username, t.start_date, t.latest_activity, t.replies, t.views
+			s.id, t.url, t.title, a.username, t.start_date, t.latest_activity, t.replies, t.views
 		FROM
-			thread t, author a
+			site s, forum f, thread t, author a
 		WHERE
-			    a.id = t.author_id
+				s.id = f.site_id
+			AND f.id = t.forum_id
+			AND a.id = t.author_id
 			AND t.id = ?`
 
 	err = errors.New("Not found") // rows.Scan will reset this if a row is found
@@ -171,17 +173,17 @@ func (sdb *ScraperDB) GetThreadById(threadId model.ThreadID) (thread model.Threa
 			var urlStr string
 			var startDate int64
 			var latest int64
-			err = rows.Scan(&urlStr, &thread.Title, &thread.Author, &startDate, &latest, thread.Replies, &thread.Views)
-			thread.StartDate = time.Unix(startDate, 0)
-			thread.Latest = time.Unix(latest, 0)
-			thread.Id = threadId
-			thread.URL, err = url.Parse(urlStr)
+			err = rows.Scan(&t.SiteId, &urlStr, &t.Title, &t.Author, &startDate, &latest, t.Replies, &t.Views)
+			t.StartDate = time.Unix(startDate, 0)
+			t.Latest = time.Unix(latest, 0)
+			t.Id = threadId
+			t.URL, err = url.Parse(urlStr)
 		},
 		stmt, threadId)
 	return
 }
 
-func (sdb *ScraperDB) GetThreadByURL(url *url.URL) (siteId model.SiteID, thread model.Thread, err error) {
+func (sdb *ScraperDB) GetThreadByURL(url *url.URL) (thread model.Thread, err error) {
 	stmt := `
 		SELECT
 			s.id, t.id, t.title, a.username, t.start_date, t.latest_activity, t.replies, t.views
@@ -198,7 +200,7 @@ func (sdb *ScraperDB) GetThreadByURL(url *url.URL) (siteId model.SiteID, thread 
 		func(rows *sql.Rows) {
 			var startDate int64
 			var latest int64
-			err = rows.Scan(&siteId, &thread.Id, &thread.Title, &thread.Author, &startDate, &latest,
+			err = rows.Scan(&thread.SiteId, &thread.Id, &thread.Title, &thread.Author, &startDate, &latest,
 				thread.Replies, &thread.Views)
 			thread.StartDate = time.Unix(startDate, 0)
 			thread.Latest = time.Unix(latest, 0)
@@ -341,7 +343,7 @@ func (sdb *ScraperDB) GetThreads(threadIds []model.ThreadID) (threadsById map[mo
 func (sdb *ScraperDB) FindThread(arg string) (thread model.Thread, err error) {
 	if url, id, err := utils.ParseURLOrID(arg); err == nil {
 		if url != nil {
-			_, thread, err = sdb.GetThreadByURL(url)
+			thread, err = sdb.GetThreadByURL(url)
 		} else {
 			thread, err = sdb.GetThreadById(model.ThreadID(id))
 		}
