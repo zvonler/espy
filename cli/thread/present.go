@@ -3,9 +3,14 @@ package thread
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/exec"
 
+	"github.com/bit101/go-ansi"
 	"github.com/spf13/cobra"
 	"github.com/zvonler/espy/database"
+	"github.com/zvonler/espy/model"
+	"golang.org/x/term"
 )
 
 func initPresentCommand() *cobra.Command {
@@ -21,16 +26,53 @@ func initPresentCommand() *cobra.Command {
 	return presentCommand
 }
 
+func paginateComments(comments []model.Comment) {
+	cmd := exec.Command("/usr/bin/less", "-FRX")
+	cmd.Stdout = os.Stdout
+
+	if stdin, err := cmd.StdinPipe(); err == nil {
+		go func() {
+			defer stdin.Close()
+			for _, c := range comments {
+				ansi.Fprintf(stdin, ansi.Cyan, "%s\n", c.URL)
+				ansi.Fprintf(stdin, ansi.Red, "%s", c.Author)
+				ansi.Fprintf(stdin, ansi.Default, ": ")
+				ansi.Fprintf(stdin, ansi.Green, "\"")
+				ansi.Fprintf(stdin, ansi.Default, c.Content)
+				ansi.Fprintf(stdin, ansi.Green, "\"\n")
+				ansi.Fprintln(stdin, ansi.Blue, "--------")
+			}
+		}()
+	} else {
+		log.Fatal(err)
+	}
+
+	err := cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func printComments(comments []model.Comment) {
+	for _, c := range comments {
+		fmt.Printf("%s\n%s: %q\n", c.URL, c.Author, c.Content)
+		fmt.Println("--------")
+	}
+}
+
 func runPresentCommand(cmd *cobra.Command, args []string) {
 	var err error
+
+	isTty := term.IsTerminal(int(os.Stdout.Fd()))
 
 	if sdb, err := database.OpenScraperDB(dbPath); err == nil {
 		defer sdb.Close()
 		if threadId, err := sdb.FindThread(args[0]); err == nil {
 			if comments, err := sdb.ThreadComments(threadId); err == nil {
-				for _, c := range comments {
-					fmt.Printf("%s\n%s: %q\n", c.URL, c.Author, c.Content)
-					fmt.Println("--------")
+				if isTty {
+					paginateComments(comments)
+				} else {
+					printComments(comments)
 				}
 			}
 		}
