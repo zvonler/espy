@@ -26,13 +26,22 @@ func initPresentCommand() *cobra.Command {
 	return presentCommand
 }
 
-func paginateComments(comments []model.Comment) {
+func paginateComments(thread model.Thread, comments []model.Comment) {
 	cmd := exec.Command("/usr/bin/less", "-FRX")
 	cmd.Stdout = os.Stdout
 
 	if stdin, err := cmd.StdinPipe(); err == nil {
 		go func() {
 			defer stdin.Close()
+
+			ansi.Fprintf(stdin, ansi.Yellow, "%s", thread.Title)
+			ansi.Fprintf(stdin, ansi.Default, " by ")
+			ansi.Fprintf(stdin, ansi.Red, "%s", thread.Author)
+			ansi.Fprintf(stdin, ansi.Default, " (")
+			ansi.Fprintf(stdin, ansi.Cyan, "%s", thread.URL)
+			ansi.Fprintf(stdin, ansi.Default, ")\n")
+			ansi.Fprintln(stdin, ansi.Blue, "========")
+
 			for _, c := range comments {
 				ansi.Fprintf(stdin, ansi.Cyan, "%s\n", c.URL)
 				ansi.Fprintf(stdin, ansi.Red, "%s", c.Author)
@@ -53,7 +62,8 @@ func paginateComments(comments []model.Comment) {
 	}
 }
 
-func printComments(comments []model.Comment) {
+func printComments(thread model.Thread, comments []model.Comment) {
+	fmt.Println("%s: (%s)\n", thread.Title, thread.URL)
 	for _, c := range comments {
 		fmt.Printf("%s\n%s: %q\n", c.URL, c.Author, c.Content)
 		fmt.Println("--------")
@@ -70,9 +80,9 @@ func runPresentCommand(cmd *cobra.Command, args []string) {
 		if thread, err := sdb.FindThread(args[0]); err == nil {
 			if comments, err := sdb.ThreadComments(thread.Id); err == nil {
 				if isTty {
-					paginateComments(comments)
+					paginateComments(thread, comments)
 				} else {
-					printComments(comments)
+					printComments(thread, comments)
 				}
 			}
 		}
