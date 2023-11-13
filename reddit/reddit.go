@@ -92,14 +92,14 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 /*---------------------------------------------------------------------------*/
 
 type ThreadScraper struct {
-	siteId   database.SiteID
-	forumId  database.ForumID
+	siteId   model.SiteID
+	forumId  model.ForumID
 	post     *reddit.PostAndComments
 	db       *database.ScraperDB
 	Comments []RedditComment
 }
 
-func NewThreadScraper(siteId database.SiteID, forumId database.ForumID, post *reddit.PostAndComments, db *database.ScraperDB) *ThreadScraper {
+func NewThreadScraper(siteId model.SiteID, forumId model.ForumID, post *reddit.PostAndComments, db *database.ScraperDB) *ThreadScraper {
 	ts := new(ThreadScraper)
 	ts.siteId = siteId
 	ts.forumId = forumId

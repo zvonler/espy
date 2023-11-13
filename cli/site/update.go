@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/zvonler/espy/database"
+	"github.com/zvonler/espy/model"
 	"github.com/zvonler/espy/reddit"
 	"github.com/zvonler/espy/xf_scraper"
 )
@@ -40,7 +41,7 @@ func runUpdateCommand(cmd *cobra.Command, args []string) {
 	}
 	defer sdb.Close()
 
-	var siteId database.SiteID
+	var siteId model.SiteID
 
 	var digitCheck = regexp.MustCompile(`^[0-9]+$`)
 	if digitCheck.MatchString(args[0]) {
@@ -48,7 +49,7 @@ func runUpdateCommand(cmd *cobra.Command, args []string) {
 		if err != nil {
 			panic(err)
 		} else {
-			siteId = database.SiteID(id)
+			siteId = model.SiteID(id)
 		}
 	} else {
 		siteId, err = sdb.GetSiteId(args[0])

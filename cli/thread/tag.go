@@ -30,11 +30,11 @@ func runTagCommand(cmd *cobra.Command, args []string) {
 
 	if sdb, err := database.OpenScraperDB(dbPath); err == nil {
 		defer sdb.Close()
-		if threadId, err := sdb.FindThread(args[0]); err == nil {
+		if thread, err := sdb.FindThread(args[0]); err == nil {
 			if untag {
-				err = sdb.RemoveThreadTags(threadId, args[1:])
+				err = sdb.RemoveThreadTags(thread.Id, args[1:])
 			} else {
-				err = sdb.AddThreadTags(threadId, args[1:])
+				err = sdb.AddThreadTags(thread.Id, args[1:])
 			}
 		}
 	}

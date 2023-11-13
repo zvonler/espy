@@ -15,13 +15,6 @@ import (
 	"github.com/zvonler/espy/utils"
 )
 
-type SiteID uint
-type ForumID uint
-type AuthorID uint
-type ThreadID uint
-type CommentID uint
-type TagID uint
-
 type ScraperDB struct {
 	Filename string
 	DB       *sql.DB
@@ -87,7 +80,7 @@ func (sdb *ScraperDB) ExecOrPanic(stmt string, params ...any) {
 	}
 }
 
-func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId SiteID, forumId ForumID, err error) {
+func (sdb *ScraperDB) InsertOrUpdateForum(url *url.URL) (siteId model.SiteID, forumId model.ForumID, err error) {
 	if siteId, err = sdb.getOrInsertSite(url.Hostname()); err == nil {
 		sdb.ForSingleRowOrPanic(
 			func(rows *sql.Rows) {
@@ -130,7 +123,7 @@ func (sdb *ScraperDB) FindAuthorComments(username string) (comments []model.Comm
 	return
 }
 
-func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t model.Thread) (threadId ThreadID, err error) {
+func (sdb *ScraperDB) InsertOrUpdateThread(siteId model.SiteID, forumId model.ForumID, t model.Thread) (threadId model.ThreadID, err error) {
 	if authorId, err := sdb.getOrInsertAuthor(t.Author, siteId); err == nil {
 		sdb.ForSingleRowOrPanic(
 			func(rows *sql.Rows) {
@@ -152,7 +145,7 @@ func (sdb *ScraperDB) InsertOrUpdateThread(siteId SiteID, forumId ForumID, t mod
 	return
 }
 
-func (sdb *ScraperDB) GetSiteId(host string) (siteId SiteID, err error) {
+func (sdb *ScraperDB) GetSiteId(host string) (siteId model.SiteID, err error) {
 	stmt := `SELECT id FROM site WHERE hostname = ?`
 	sdb.ForSingleRowOrPanic(
 		func(rows *sql.Rows) {
@@ -162,27 +155,57 @@ func (sdb *ScraperDB) GetSiteId(host string) (siteId SiteID, err error) {
 	return
 }
 
-func (sdb *ScraperDB) GetThreadByURL(url *url.URL) (siteId SiteID, threadId ThreadID, err error) {
+func (sdb *ScraperDB) GetThreadById(threadId model.ThreadID) (thread model.Thread, err error) {
 	stmt := `
 		SELECT
-			s.id, t.id
+			t.title, a.username, t.start_date, t.latest_activity, t.replies, t.views
 		FROM
-			site s, forum f, thread t
+			thread t, author a
+		WHERE
+			AND a.id = t.author_id
+			AND t.id = ?`
+
+	err = errors.New("Not found") // rows.Scan will reset this if a row is found
+	sdb.ForSingleRowOrPanic(
+		func(rows *sql.Rows) {
+			var startDate int64
+			var latest int64
+			err = rows.Scan(&thread.Title, &thread.Author, &startDate, &latest, thread.Replies, &thread.Views)
+			thread.StartDate = time.Unix(startDate, 0)
+			thread.Latest = time.Unix(latest, 0)
+			thread.Id = threadId
+		},
+		stmt, threadId)
+	return
+}
+
+func (sdb *ScraperDB) GetThreadByURL(url *url.URL) (siteId model.SiteID, thread model.Thread, err error) {
+	stmt := `
+		SELECT
+			s.id, t.id, t.title, a.username, t.start_date, t.latest_activity, t.replies, t.views
+		FROM
+			site s, forum f, thread t, author a
 		WHERE
 			    s.id = f.site_id
 			AND f.id = t.forum_id
+			AND a.id = t.author_id
 			AND t.url = ?`
 
 	err = errors.New("Not found") // rows.Scan will reset this if a row is found
 	sdb.ForSingleRowOrPanic(
 		func(rows *sql.Rows) {
-			err = rows.Scan(&siteId, &threadId)
+			var startDate int64
+			var latest int64
+			err = rows.Scan(&siteId, &thread.Id, &thread.Title, &thread.Author, &startDate, &latest,
+				thread.Replies, &thread.Views)
+			thread.StartDate = time.Unix(startDate, 0)
+			thread.Latest = time.Unix(latest, 0)
 		},
 		stmt, utils.TrimmedURL(url).String())
 	return
 }
 
-func (sdb *ScraperDB) getOrInsertSite(hostname string) (id SiteID, err error) {
+func (sdb *ScraperDB) getOrInsertSite(hostname string) (id model.SiteID, err error) {
 	sdb.ForSingleRowOrPanic(
 		func(rows *sql.Rows) {
 			err = rows.Scan(&id)
@@ -198,7 +221,7 @@ func (sdb *ScraperDB) getOrInsertSite(hostname string) (id SiteID, err error) {
 	return
 }
 
-func (sdb *ScraperDB) getOrInsertAuthor(username string, siteId SiteID) (id AuthorID, err error) {
+func (sdb *ScraperDB) getOrInsertAuthor(username string, siteId model.SiteID) (id model.AuthorID, err error) {
 	sdb.ForSingleRowOrPanic(
 		func(rows *sql.Rows) {
 			err = rows.Scan(&id)
@@ -214,9 +237,9 @@ func (sdb *ScraperDB) getOrInsertAuthor(username string, siteId SiteID) (id Auth
 	return
 }
 
-func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []model.Comment) (err error) {
+func (sdb *ScraperDB) AddComments(siteId model.SiteID, threadId model.ThreadID, comments []model.Comment) (err error) {
 	for _, comment := range comments {
-		var authorId AuthorID
+		var authorId model.AuthorID
 		if authorId, err = sdb.getOrInsertAuthor(comment.Author, siteId); err != nil {
 			break
 		}
@@ -231,17 +254,17 @@ func (sdb *ScraperDB) AddComments(siteId SiteID, threadId ThreadID, comments []m
 	return
 }
 
-func (sdb *ScraperDB) GetForums() (forumsById map[ForumID]*url.URL, err error) {
+func (sdb *ScraperDB) GetForums() (forumsById map[model.ForumID]*url.URL, err error) {
 	stmt := `SELECT id, url FROM forum`
 
-	forumsById = make(map[ForumID]*url.URL)
+	forumsById = make(map[model.ForumID]*url.URL)
 	sdb.ForEachRowOrPanic(
 		func(rows *sql.Rows) {
 			var id uint
 			var urlStr string
 			rows.Scan(&id, &urlStr)
 			if url, err := url.Parse(urlStr); err == nil {
-				forumsById[ForumID(id)] = url
+				forumsById[model.ForumID(id)] = url
 			} else {
 				panic(err)
 			}
@@ -250,28 +273,28 @@ func (sdb *ScraperDB) GetForums() (forumsById map[ForumID]*url.URL, err error) {
 	return
 }
 
-func (sdb *ScraperDB) GetSites() (hostnamesById map[SiteID]string, err error) {
+func (sdb *ScraperDB) GetSites() (hostnamesById map[model.SiteID]string, err error) {
 	stmt := "SELECT id, hostname FROM site"
-	hostnamesById = make(map[SiteID]string)
+	hostnamesById = make(map[model.SiteID]string)
 	sdb.ForEachRowOrPanic(
 		func(rows *sql.Rows) {
 			var id uint
 			var hostname string
 			rows.Scan(&id, &hostname)
-			hostnamesById[SiteID(id)] = hostname
+			hostnamesById[model.SiteID(id)] = hostname
 		},
 		stmt)
 	return
 }
 
-func (sdb *ScraperDB) GetThread(threadId ThreadID) (t model.Thread, err error) {
-	if byId, err := sdb.GetThreads([]ThreadID{threadId}); err == nil {
+func (sdb *ScraperDB) GetThread(threadId model.ThreadID) (t model.Thread, err error) {
+	if byId, err := sdb.GetThreads([]model.ThreadID{threadId}); err == nil {
 		t = byId[threadId]
 	}
 	return
 }
 
-func (sdb *ScraperDB) GetThreads(threadIds []ThreadID) (threadsById map[ThreadID]model.Thread, err error) {
+func (sdb *ScraperDB) GetThreads(threadIds []model.ThreadID) (threadsById map[model.ThreadID]model.Thread, err error) {
 	stmt := `
 		SELECT
 			t.id, t.url, t.title, a.username, t.start_date, t.latest_activity, t.replies, t.views
@@ -279,7 +302,7 @@ func (sdb *ScraperDB) GetThreads(threadIds []ThreadID) (threadsById map[ThreadID
 		WHERE
 			a.id = t.author_id`
 
-	threadsById = make(map[ThreadID]model.Thread)
+	threadsById = make(map[model.ThreadID]model.Thread)
 	sdb.ForEachRowOrPanic(
 		func(rows *sql.Rows) {
 			var id uint
@@ -293,7 +316,7 @@ func (sdb *ScraperDB) GetThreads(threadIds []ThreadID) (threadsById map[ThreadID
 
 			rows.Scan(&id, &urlStr, &title, &username, &startDate, &latest, &replies, &views)
 			if url, err := url.Parse(urlStr); err == nil {
-				threadsById[ThreadID(id)] =
+				threadsById[model.ThreadID(id)] =
 					model.Thread{
 						URL:       url,
 						Title:     title,
@@ -312,20 +335,18 @@ func (sdb *ScraperDB) GetThreads(threadIds []ThreadID) (threadsById map[ThreadID
 }
 
 // Finds a thread in the database by either URL or ID.
-func (sdb *ScraperDB) FindThread(arg string) (threadId ThreadID, err error) {
+func (sdb *ScraperDB) FindThread(arg string) (thread model.Thread, err error) {
 	if url, id, err := utils.ParseURLOrID(arg); err == nil {
 		if url != nil {
-			if _, dbId, err := sdb.GetThreadByURL(url); err == nil {
-				threadId = ThreadID(dbId)
-			}
+			_, thread, err = sdb.GetThreadByURL(url)
 		} else {
-			threadId = ThreadID(id)
+			thread, err = sdb.GetThreadById(model.ThreadID(id))
 		}
 	}
 	return
 }
 
-func (sdb *ScraperDB) ThreadComments(threadId ThreadID) (comments []model.Comment, err error) {
+func (sdb *ScraperDB) ThreadComments(threadId model.ThreadID) (comments []model.Comment, err error) {
 	stmt := `
 		SELECT
 			c.url, a.username, c.published, c.content
@@ -359,7 +380,7 @@ func (sdb *ScraperDB) ThreadComments(threadId ThreadID) (comments []model.Commen
 	return
 }
 
-func (sdb *ScraperDB) getOrInsertTagId(tag string) (id TagID, err error) {
+func (sdb *ScraperDB) getOrInsertTagId(tag string) (id model.TagID, err error) {
 	sdb.ForSingleRowOrPanic(
 		func(rows *sql.Rows) {
 			err = rows.Scan(&id)
@@ -375,7 +396,7 @@ func (sdb *ScraperDB) getOrInsertTagId(tag string) (id TagID, err error) {
 	return
 }
 
-func (sdb *ScraperDB) AddThreadTags(threadId ThreadID, tags []string) (err error) {
+func (sdb *ScraperDB) AddThreadTags(threadId model.ThreadID, tags []string) (err error) {
 	for _, tag := range tags {
 		if tagId, err := sdb.getOrInsertTagId(tag); err == nil {
 			stmt := `
@@ -392,7 +413,7 @@ func (sdb *ScraperDB) AddThreadTags(threadId ThreadID, tags []string) (err error
 	return
 }
 
-func (sdb *ScraperDB) RemoveThreadTags(threadId ThreadID, tags []string) (err error) {
+func (sdb *ScraperDB) RemoveThreadTags(threadId model.ThreadID, tags []string) (err error) {
 	for _, tag := range tags {
 		if tagId, err := sdb.getOrInsertTagId(tag); err == nil {
 			stmt := "DELETE FROM thread_tag WHERE thread_id = ? AND tag_id = ?"
@@ -404,7 +425,7 @@ func (sdb *ScraperDB) RemoveThreadTags(threadId ThreadID, tags []string) (err er
 	return
 }
 
-func (sdb *ScraperDB) ThreadParticipants(threadId ThreadID) (usernames []string, err error) {
+func (sdb *ScraperDB) ThreadParticipants(threadId model.ThreadID) (usernames []string, err error) {
 	stmt := `
 		SELECT DISTINCT
 			username
@@ -436,7 +457,7 @@ func (sdb *ScraperDB) ThreadParticipants(threadId ThreadID) (usernames []string,
 	return
 }
 
-func (sdb *ScraperDB) CommentTimeRange(threadId ThreadID) (res []time.Time) {
+func (sdb *ScraperDB) CommentTimeRange(threadId model.ThreadID) (res []time.Time) {
 	sdb.ForSingleRowOrPanic(
 		func(rows *sql.Rows) {
 			var earliest, latest uint
@@ -449,7 +470,7 @@ func (sdb *ScraperDB) CommentTimeRange(threadId ThreadID) (res []time.Time) {
 	return
 }
 
-func (sdb *ScraperDB) FirstCommentLoaded(threadId ThreadID) (res bool) {
+func (sdb *ScraperDB) FirstCommentLoaded(threadId model.ThreadID) (res bool) {
 	sdb.ForSingleRowOrPanic(
 		func(rows *sql.Rows) {
 			res = true
@@ -461,11 +482,11 @@ func (sdb *ScraperDB) FirstCommentLoaded(threadId ThreadID) (res bool) {
 	return
 }
 
-func (sdb *ScraperDB) SetForumLastScraped(forumId ForumID, time time.Time) {
+func (sdb *ScraperDB) SetForumLastScraped(forumId model.ForumID, time time.Time) {
 	sdb.ExecOrPanic("UPDATE forum SET last_scraped = ? WHERE id = ?", time.Unix(), forumId)
 }
 
-func (sdb *ScraperDB) GetForumLastScraped(forumId ForumID) (tm time.Time, err error) {
+func (sdb *ScraperDB) GetForumLastScraped(forumId model.ForumID) (tm time.Time, err error) {
 	sdb.ForSingleRowOrPanic(
 		func(rows *sql.Rows) {
 			var epochSecs int64

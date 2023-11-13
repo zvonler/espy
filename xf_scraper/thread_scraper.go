@@ -13,11 +13,12 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly"
 	"github.com/zvonler/espy/database"
+	"github.com/zvonler/espy/model"
 	"golang.org/x/net/html"
 )
 
 type ThreadScraper struct {
-	threadId        database.ThreadID
+	threadId        model.ThreadID
 	thread          XFThread
 	db              *database.ScraperDB
 	Comments        []XFComment
@@ -28,7 +29,7 @@ type ThreadScraper struct {
 	latestScraped   time.Time
 }
 
-func NewThreadScraper(threadId database.ThreadID, thread XFThread, db *database.ScraperDB) *ThreadScraper {
+func NewThreadScraper(threadId model.ThreadID, thread XFThread, db *database.ScraperDB) *ThreadScraper {
 	ts := new(ThreadScraper)
 	ts.threadId = threadId
 	ts.thread = thread

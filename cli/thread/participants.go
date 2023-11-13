@@ -26,8 +26,8 @@ func runParticipantsCommand(cmd *cobra.Command, args []string) {
 
 	if sdb, err := database.OpenScraperDB(dbPath); err == nil {
 		defer sdb.Close()
-		if threadId, err := sdb.FindThread(args[0]); err == nil {
-			if usernames, err := sdb.ThreadParticipants(threadId); err == nil {
+		if thread, err := sdb.FindThread(args[0]); err == nil {
+			if usernames, err := sdb.ThreadParticipants(thread.Id); err == nil {
 				for _, username := range usernames {
 					fmt.Println(username)
 				}

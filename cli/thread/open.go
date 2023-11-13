@@ -24,10 +24,8 @@ func runOpenCommand(cmd *cobra.Command, args []string) {
 
 	if sdb, err := database.OpenScraperDB(dbPath); err == nil {
 		defer sdb.Close()
-		if threadId, err := sdb.FindThread(args[0]); err == nil {
-			if t, err := sdb.GetThread(threadId); err == nil {
-				browser.OpenURL(t.URL.String())
-			}
+		if thread, err := sdb.FindThread(args[0]); err == nil {
+			browser.OpenURL(thread.URL.String())
 		}
 	}
 

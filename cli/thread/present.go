@@ -67,8 +67,8 @@ func runPresentCommand(cmd *cobra.Command, args []string) {
 
 	if sdb, err := database.OpenScraperDB(dbPath); err == nil {
 		defer sdb.Close()
-		if threadId, err := sdb.FindThread(args[0]); err == nil {
-			if comments, err := sdb.ThreadComments(threadId); err == nil {
+		if thread, err := sdb.FindThread(args[0]); err == nil {
+			if comments, err := sdb.ThreadComments(thread.Id); err == nil {
 				if isTty {
 					paginateComments(comments)
 				} else {

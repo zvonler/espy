@@ -5,7 +5,15 @@ import (
 	"time"
 )
 
+type SiteID uint
+type ForumID uint
+type AuthorID uint
+type ThreadID uint
+type CommentID uint
+type TagID uint
+
 type Thread struct {
+	Id        ThreadID
 	URL       *url.URL
 	Title     string
 	Author    string

@@ -57,15 +57,15 @@ func runScrapeCommand(cmd *cobra.Command, args []string) {
 		fs.LoadThreadsWithActivitySince(cutoff, true)
 	} else if strings.Contains(url.Path, "/threads/") {
 		// If url already in thread table, create ThreadScraper
-		if siteId, threadId, err := sdb.GetThreadByURL(url); err == nil {
-			thread := xf_scraper.XFThread{model.Thread{URL: url}}
-			ts := xf_scraper.NewThreadScraper(threadId, thread, sdb)
+		if siteId, thread, err := sdb.GetThreadByURL(url); err == nil {
+			xfThread := xf_scraper.XFThread{model.Thread{URL: thread.URL}}
+			ts := xf_scraper.NewThreadScraper(thread.Id, xfThread, sdb)
 			ts.LoadCommentsSince(cutoff)
 			comments := make([]model.Comment, len(ts.Comments), len(ts.Comments))
 			for i := range ts.Comments {
 				comments[i] = ts.Comments[i].Comment
 			}
-			sdb.AddComments(siteId, threadId, comments)
+			sdb.AddComments(siteId, thread.Id, comments)
 		} else {
 			// Else get forum from thread page?
 			panic("Can't load new thread without forum and site\n")
