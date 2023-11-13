@@ -63,7 +63,7 @@ func paginateComments(thread model.Thread, comments []model.Comment) {
 }
 
 func printComments(thread model.Thread, comments []model.Comment) {
-	fmt.Println("%s: (%s)\n", thread.Title, thread.URL)
+	fmt.Printf("%s: (%s)\n", thread.Title, thread.URL)
 	for _, c := range comments {
 		fmt.Printf("%s\n%s: %q\n", c.URL, c.Author, c.Content)
 		fmt.Println("--------")

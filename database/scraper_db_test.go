@@ -19,7 +19,7 @@ func TestBasicDatabase(t *testing.T) {
 	require.Equal(t, nil, err)
 	defer db.Close()
 
-	firstLoaded := db.FirstCommentLoaded(ThreadID(0))
+	firstLoaded := db.FirstCommentLoaded(model.ThreadID(0))
 	require.Equal(t, false, firstLoaded)
 
 	forumHref := "https://some-forum.com/forums/name.123"
@@ -27,8 +27,8 @@ func TestBasicDatabase(t *testing.T) {
 	require.Equal(t, nil, err)
 	siteId, forumId, err := db.InsertOrUpdateForum(forumUrl)
 	require.Equal(t, nil, err)
-	require.Greater(t, siteId, SiteID(0))
-	require.Greater(t, forumId, ForumID(0))
+	require.Greater(t, siteId, model.SiteID(0))
+	require.Greater(t, forumId, model.ForumID(0))
 
 	{
 		// Test that trailing '/' is considered equal
@@ -49,13 +49,13 @@ func TestBasicDatabase(t *testing.T) {
 	}
 	threadId, err := db.InsertOrUpdateThread(siteId, forumId, thread)
 	require.Equal(t, nil, err)
-	require.Greater(t, threadId, ThreadID(0))
+	require.Greater(t, threadId, model.ThreadID(0))
 
 	{
-		dbSiteId, dbThreadId, err := db.GetThreadByURL(threadUrl)
+		thread, err := db.GetThreadByURL(threadUrl)
 		require.Equal(t, nil, err)
-		require.Equal(t, siteId, dbSiteId)
-		require.Equal(t, dbThreadId, threadId)
+		require.Equal(t, siteId, thread.SiteId)
+		require.Equal(t, threadId, thread.Id)
 	}
 
 	require.Equal(t, []time.Time(nil), db.CommentTimeRange(threadId))

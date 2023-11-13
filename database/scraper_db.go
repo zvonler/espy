@@ -201,7 +201,7 @@ func (sdb *ScraperDB) GetThreadByURL(url *url.URL) (thread model.Thread, err err
 			var startDate int64
 			var latest int64
 			err = rows.Scan(&thread.SiteId, &thread.Id, &thread.Title, &thread.Author, &startDate, &latest,
-				thread.Replies, &thread.Views)
+				&thread.Replies, &thread.Views)
 			thread.StartDate = time.Unix(startDate, 0)
 			thread.Latest = time.Unix(latest, 0)
 			thread.URL = url
