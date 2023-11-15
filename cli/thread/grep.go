@@ -6,27 +6,28 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
+	"github.com/zvonler/espy/configuration"
 	"github.com/zvonler/espy/database"
 )
 
 func initGrepCommand() *cobra.Command {
 	grepCommand := &cobra.Command{
-		Use:   "grep [-d DB] <regex>...",
+		Use:   "grep <regex>...",
 		Short: "Locates threads matching one or more regular expression(s)",
 		Args:  cobra.MinimumNArgs(1),
 		Run:   runGrepCommand,
 	}
-
-	grepCommand.Flags().StringVar(&dbPath, "database", "espy.db", "Database filename")
-
 	return grepCommand
 }
 
 func runGrepCommand(cmd *cobra.Command, args []string) {
-	sdb, err := database.OpenScraperDB(dbPath)
-	if err != nil {
+	var err error
+	var sdb *database.ScraperDB
+
+	if sdb, err = configuration.OpenExistingDatabase(); err != nil {
 		log.Fatal(err)
 	}
+
 	defer sdb.Close()
 
 	stmt := `

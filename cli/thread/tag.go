@@ -4,7 +4,9 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
+	"github.com/zvonler/espy/configuration"
 	"github.com/zvonler/espy/database"
+	"github.com/zvonler/espy/model"
 )
 
 var (
@@ -19,7 +21,6 @@ func initTagCommand() *cobra.Command {
 		Run:   runTagCommand,
 	}
 
-	tagCommand.Flags().StringVar(&dbPath, "database", "espy.db", "Database filename")
 	tagCommand.Flags().BoolVar(&untag, "untag", false, "Remove tags")
 
 	return tagCommand
@@ -27,10 +28,12 @@ func initTagCommand() *cobra.Command {
 
 func runTagCommand(cmd *cobra.Command, args []string) {
 	var err error
+	var sdb *database.ScraperDB
+	var thread model.Thread
 
-	if sdb, err := database.OpenScraperDB(dbPath); err == nil {
+	if sdb, err = configuration.OpenExistingDatabase(); err == nil {
 		defer sdb.Close()
-		if thread, err := sdb.FindThread(args[0]); err == nil {
+		if thread, err = sdb.FindThread(args[0]); err == nil {
 			if untag {
 				err = sdb.RemoveThreadTags(thread.Id, args[1:])
 			} else {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/bit101/go-ansi"
 	"github.com/spf13/cobra"
+	"github.com/zvonler/espy/configuration"
 	"github.com/zvonler/espy/database"
 	"github.com/zvonler/espy/model"
 	"golang.org/x/term"
@@ -15,14 +16,11 @@ import (
 
 func initPresentCommand() *cobra.Command {
 	presentCommand := &cobra.Command{
-		Use:   "present [-d DB] [thread_id | URL]",
+		Use:   "present <thread_id | thread_URL>",
 		Short: "Formats the content of a thread for human consumption",
 		Args:  cobra.MinimumNArgs(1),
 		Run:   runPresentCommand,
 	}
-
-	presentCommand.Flags().StringVar(&dbPath, "database", "espy.db", "Database filename")
-
 	return presentCommand
 }
 
@@ -71,14 +69,17 @@ func printComments(thread model.Thread, comments []model.Comment) {
 }
 
 func runPresentCommand(cmd *cobra.Command, args []string) {
-	var err error
-
 	isTty := term.IsTerminal(int(os.Stdout.Fd()))
 
-	if sdb, err := database.OpenScraperDB(dbPath); err == nil {
+	var err error
+	var sdb *database.ScraperDB
+	var thread model.Thread
+	var comments []model.Comment
+
+	if sdb, err = configuration.OpenExistingDatabase(); err == nil {
 		defer sdb.Close()
-		if thread, err := sdb.FindThread(args[0]); err == nil {
-			if comments, err := sdb.ThreadComments(thread.Id); err == nil {
+		if thread, err = sdb.FindThread(args[0]); err == nil {
+			if comments, err = sdb.ThreadComments(thread.Id); err == nil {
 				if isTty {
 					paginateComments(thread, comments)
 				} else {

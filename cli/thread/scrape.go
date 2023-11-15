@@ -16,20 +16,23 @@ var (
 
 func initScrapeCommand() *cobra.Command {
 	scrapeCommand := &cobra.Command{
-		Use:   "scrape [-d DB] [thread_id | URL]",
+		Use:   "scrape <thread_id | thread_URL>",
 		Short: "Scrapes a threads comments",
 		Args:  cobra.MinimumNArgs(1),
 		Run:   runScrapeCommand,
 	}
 
 	scrapeCommand.Flags().IntVar(&lookbackDays, "lookback-days", 720, "Ignore activity earlier than lookback-days before now")
-	scrapeCommand.Flags().StringVar(&dbPath, "database", "espy.db", "Database filename")
 
 	return scrapeCommand
 }
 
 func runScrapeCommand(cmd *cobra.Command, args []string) {
 	cutoff := time.Now().AddDate(0, 0, -lookbackDays)
+	dbPath, err := cmd.PersistentFlags().GetString("database")
+	if err != nil {
+		log.Fatal(err)
+	}
 	if sdb, err := database.OpenScraperDB(dbPath); err == nil {
 		defer sdb.Close()
 		if thread, err := sdb.FindThread(args[0]); err == nil {

@@ -6,10 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	dbPath string
-)
-
 func NewCommand() *cobra.Command {
 	threadCommand := &cobra.Command{
 		Use:   "thread",
