@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/zvonler/espy/database"
 	"github.com/zvonler/espy/model"
 	"github.com/zvonler/espy/xf_scraper"
@@ -29,10 +30,7 @@ func initScrapeCommand() *cobra.Command {
 
 func runScrapeCommand(cmd *cobra.Command, args []string) {
 	cutoff := time.Now().AddDate(0, 0, -lookbackDays)
-	dbPath, err := cmd.PersistentFlags().GetString("database")
-	if err != nil {
-		log.Fatal(err)
-	}
+	dbPath := viper.GetString("database")
 	if sdb, err := database.OpenScraperDB(dbPath); err == nil {
 		defer sdb.Close()
 		if thread, err := sdb.FindThread(args[0]); err == nil {
