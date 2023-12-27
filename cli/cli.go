@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/zvonler/espy/cli/author"
+	"github.com/zvonler/espy/cli/comment"
 	"github.com/zvonler/espy/cli/forum"
 	"github.com/zvonler/espy/cli/scrape"
 	"github.com/zvonler/espy/cli/site"
@@ -29,6 +30,7 @@ func NewCommand() *cobra.Command {
 	viper.BindPFlag("database", espyCli.PersistentFlags().Lookup("database"))
 
 	espyCli.AddCommand(author.NewCommand())
+	espyCli.AddCommand(comment.NewCommand())
 	espyCli.AddCommand(forum.NewCommand())
 	espyCli.AddCommand(scrape.NewCommand())
 	espyCli.AddCommand(site.NewCommand())
