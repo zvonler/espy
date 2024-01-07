@@ -23,6 +23,7 @@ func NewCommand() *cobra.Command {
 	threadCommand.AddCommand(initPresentCommand())
 	threadCommand.AddCommand(initScrapeCommand())
 	threadCommand.AddCommand(initTagCommand())
+	threadCommand.AddCommand(initWordcloudCommand())
 
 	return threadCommand
 }
