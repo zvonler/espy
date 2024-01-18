@@ -38,7 +38,8 @@ func NewThreadScraper(threadId model.ThreadID, thread XFThread, db *database.Scr
 	ts.pages = 1
 
 	ts.pageNumScraper = newCollectorWithCFRoundtripper()
-	ts.pageNumScraper.OnHTML("nav.pageNavWrapper--mixed", func(e *colly.HTMLElement) {
+
+	getPageCount := func(e *colly.HTMLElement) {
 		// Pages with nav bars have one at top and at bottom, so skip the second
 		if ts.pages > 1 {
 			return
@@ -55,14 +56,19 @@ func NewThreadScraper(threadId model.ThreadID, thread XFThread, db *database.Scr
 				fmt.Printf("Couldn't parse lastPage from %v\n", lastPage)
 			}
 		})
-	})
+	}
+
+	ts.pageNumScraper.OnHTML("nav.pageNavWrapper--mixed", getPageCount)
+	if ts.pages == 1 {
+		ts.pageNumScraper.OnHTML("nav.pageNavWrapper--full", getPageCount)
+	}
 
 	ts.pageNumScraper.OnRequest(func(r *colly.Request) {
 		fmt.Printf("PageNumScraper (%d) visiting %s\n", ts.threadId, r.URL.String())
 	})
 
 	ts.pageNumScraper.OnError(func(r *colly.Response, err error) {
-		fmt.Printf("PageNumScraper got %v with body %s\n", err, r.Body)
+		fmt.Printf("PageNumScraper got error %v for url %s\n", err, r.Request.URL.String())
 	})
 
 	ts.commentScraper = newCollectorWithCFRoundtripper()
@@ -121,7 +127,7 @@ func NewThreadScraper(threadId model.ThreadID, thread XFThread, db *database.Scr
 		temp.Content = strings.TrimLeft(temp.Content, "\n")
 		temp.Content = strings.TrimRight(temp.Content, "\n")
 
-		e.ForEach("ul.message-attribution-main", func(_ int, e *colly.HTMLElement) {
+		getUrl := func(_ int, e *colly.HTMLElement) {
 			commentHref, err := url.Parse(e.ChildAttr("a", "href"))
 			if err != nil {
 				panic(err)
@@ -139,7 +145,11 @@ func NewThreadScraper(threadId model.ThreadID, thread XFThread, db *database.Scr
 					ts.earliestScraped = temp.Published
 				}
 			}
-		})
+		}
+		e.ForEach("ul.message-attribution-main", getUrl)
+		if temp.URL == nil {
+			e.ForEach("div.message-attribution-main", getUrl)
+		}
 
 		ts.Comments = append(ts.Comments, temp)
 	})

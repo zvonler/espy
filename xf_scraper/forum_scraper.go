@@ -38,7 +38,7 @@ func NewForumScraper(forumURL *url.URL, db *database.ScraperDB) *ForumScraper {
 		})
 	})
 
-	fs.collector.OnHTML("div.mark-thread:not([class*=is-prefix])", func(e *colly.HTMLElement) {
+	processThread := func(e *colly.HTMLElement) {
 		temp := XFThread{}
 		temp.Author = e.Attr("data-author")
 
@@ -72,15 +72,20 @@ func NewForumScraper(forumURL *url.URL, db *database.ScraperDB) *ForumScraper {
 
 		e.ForEach("div.structItem-cell--latest", func(_ int, e *colly.HTMLElement) {
 			dataTime := e.ChildAttr("time.u-dt", "data-time")
-			if tm, err := strconv.Atoi(dataTime); err != nil {
-				log.Printf("Unparseable data-time '%v' for %s", dataTime, temp.Title)
-			} else {
-				temp.Latest = time.Unix(int64(tm), 0)
+			if dataTime != "" {
+				if tm, err := strconv.Atoi(dataTime); err != nil {
+					log.Printf("Unparseable data-time '%v' for %s", dataTime, temp.Title)
+				} else {
+					temp.Latest = time.Unix(int64(tm), 0)
+				}
 			}
 		})
 
 		fs.Threads = append(fs.Threads, temp)
-	})
+	}
+
+	fs.collector.OnHTML("div.structItem--thread", processThread)
+	fs.collector.OnHTML("div.mark-thread:not([class*=is-prefix])", processThread)
 
 	fs.collector.OnRequest(func(r *colly.Request) {
 		fmt.Println("ForumScraper visiting", r.URL.String())
