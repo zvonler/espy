@@ -34,10 +34,11 @@ func runGrepCommand(cmd *cobra.Command, args []string) {
 
 	stmt := `
 		SELECT
-			a.id, a.username, COUNT(c.id) comments, MAX(c.published) latest
-		FROM author a, comment c
+			a.id, a.username, s.hostname, COUNT(c.id) comments, MAX(c.published) latest
+		FROM author a, comment c, site s
 		WHERE
-			c.author_id = a.id`
+			    c.author_id = a.id
+			AND s.id = a.site_id`
 
 	exprs := make([]string, len(args))
 	anyArgs := make([]any, len(args))
@@ -53,18 +54,19 @@ func runGrepCommand(cmd *cobra.Command, args []string) {
 		ORDER BY latest DESC, comments`
 
 	output := []string{
-		"AuthorID | Username | Comments | Latest",
+		"AuthorID | Username | Site | Comments | Latest",
 	}
 
 	sdb.ForEachRowOrPanic(
 		func(rows *sql.Rows) {
 			var id uint
 			var username string
+			var site string
 			var comments uint
 			var latestTm int64
-			rows.Scan(&id, &username, &comments, &latestTm)
+			rows.Scan(&id, &username, &site, &comments, &latestTm)
 			latest := time.Unix(latestTm, 0)
-			output = append(output, fmt.Sprintf("%d | %s | %d | %v", id, username, comments, latest))
+			output = append(output, fmt.Sprintf("%d | %s | %s | %d | %v", id, username, site, comments, latest))
 		},
 		stmt, anyArgs...)
 
