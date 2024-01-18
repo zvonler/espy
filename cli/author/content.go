@@ -28,6 +28,7 @@ func runContentCommand(cmd *cobra.Command, args []string) {
 		defer sdb.Close()
 		if comments, err := sdb.FindAuthorComments(args[0]); err == nil {
 			for _, comment := range comments {
+				fmt.Println(comment.URL)
 				fmt.Println(comment.Content)
 			}
 		}
