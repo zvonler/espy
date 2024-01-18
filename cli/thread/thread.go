@@ -6,6 +6,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	startTime string
+	endTime   string
+)
+
 func NewCommand() *cobra.Command {
 	threadCommand := &cobra.Command{
 		Use:   "thread",

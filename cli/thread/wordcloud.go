@@ -77,6 +77,10 @@ func initWordcloudCommand() *cobra.Command {
 		Short: "Create a word cloud from the comments in the thread",
 		Run:   runWordcloudCommand,
 	}
+
+	wordcloudCommand.Flags().StringVar(&startTime, "start-time", "", "Ignore comments before start-time")
+	wordcloudCommand.Flags().StringVar(&endTime, "end-time", "", "Ignore comments after end-time")
+
 	return wordcloudCommand
 }
 
@@ -93,12 +97,30 @@ func runWordcloudCommand(cmd *cobra.Command, args []string) {
 
 	stopwords.LoadStopWordsFromFile("stopwords.txt", "en", "\n")
 
+	dateTimeLayout := "20060102T15:04"
+
+	var startTm time.Time
+	var endTm time.Time
+
+	if startTime != "" {
+		startTm, _ = time.Parse(dateTimeLayout, startTime)
+	}
+	if endTime != "" {
+		endTm, _ = time.Parse(dateTimeLayout, endTime)
+	}
+
 	if sdb, err = configuration.OpenExistingDatabase(); err == nil {
 		defer sdb.Close()
 		for _, threadRef := range args {
 			if thread, err = sdb.FindThread(threadRef); err == nil {
 				if comments, err = sdb.ThreadComments(thread.Id); err == nil {
 					for _, c := range comments {
+						if !startTm.IsZero() && c.Published.Before(startTm) {
+							continue
+						}
+						if !endTm.IsZero() && c.Published.After(endTm) {
+							continue
+						}
 						content := lightboxRe.ReplaceAllString(c.Content, "")
 						relevant := stopwords.CleanString(content, "en", true)
 						for _, w := range wordRe.FindAllString(relevant, -1) {
