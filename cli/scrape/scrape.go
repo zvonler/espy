@@ -53,17 +53,17 @@ func runScrapeCommand(cmd *cobra.Command, args []string) {
 	cutoff := time.Now().AddDate(0, 0, -lookbackDays)
 
 	if strings.Contains(url.Host, "reddit.com") {
-		fs := reddit.NewForumScraper(url, sdb)
-		fs.LoadThreadsWithActivitySince(cutoff)
+		fs := reddit.NewForumScraper(url)
+		fs.LoadThreadsWithActivitySince(sdb, cutoff)
 	} else if strings.Contains(url.Path, "/forums/") {
-		fs := xf_scraper.NewForumScraper(url, sdb)
-		fs.LoadThreadsWithActivitySince(cutoff, true)
+		fs := xf_scraper.NewForumScraper(url)
+		fs.LoadThreadsWithActivitySince(sdb, cutoff, true)
 	} else if strings.Contains(url.Path, "/threads/") {
 		// If url already in thread table, create ThreadScraper
 		if thread, err := sdb.GetThreadByURL(url); err == nil {
 			xfThread := xf_scraper.XFThread{model.Thread{URL: thread.URL}}
-			ts := xf_scraper.NewThreadScraper(thread.Id, xfThread, sdb)
-			ts.LoadCommentsSince(cutoff)
+			ts := xf_scraper.NewThreadScraper(thread.Id, xfThread)
+			ts.LoadCommentsSince(sdb, cutoff)
 			comments := make([]model.Comment, len(ts.Comments), len(ts.Comments))
 			for i := range ts.Comments {
 				comments[i] = ts.Comments[i].Comment

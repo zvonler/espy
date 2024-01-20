@@ -15,20 +15,18 @@ import (
 
 type ForumScraper struct {
 	forumURL  *url.URL
-	db        *database.ScraperDB
 	Threads   []XFThread
 	SubForums []*url.URL
-	collector *colly.Collector
+	Collector *colly.Collector
 }
 
-func NewForumScraper(forumURL *url.URL, db *database.ScraperDB) *ForumScraper {
+func NewForumScraper(forumURL *url.URL) *ForumScraper {
 	fs := new(ForumScraper)
 	fs.Threads = make([]XFThread, 0)
-	fs.collector = newCollectorWithCFRoundtripper()
-	fs.db = db
+	fs.Collector = newCollectorWithCFRoundtripper()
 	fs.forumURL = forumURL
 
-	fs.collector.OnHTML("div.node--forum", func(e *colly.HTMLElement) {
+	fs.Collector.OnHTML("div.node--forum", func(e *colly.HTMLElement) {
 		e.ForEach("h3.node-title", func(_ int, e *colly.HTMLElement) {
 			if url, err := url.Parse(e.ChildAttr("a", "href")); err == nil {
 				fs.SubForums = append(fs.SubForums, e.Request.URL.ResolveReference(url))
@@ -90,60 +88,60 @@ func NewForumScraper(forumURL *url.URL, db *database.ScraperDB) *ForumScraper {
 		}
 	}
 
-	fs.collector.OnHTML("div.structItem--thread", processThread)
-	fs.collector.OnHTML("div.mark-thread:not([class*=is-prefix])", processThread)
+	fs.Collector.OnHTML("div.structItem--thread", processThread)
+	fs.Collector.OnHTML("div.mark-thread:not([class*=is-prefix])", processThread)
 
-	fs.collector.OnRequest(func(r *colly.Request) {
+	fs.Collector.OnRequest(func(r *colly.Request) {
 		fmt.Println("ForumScraper visiting", r.URL.String())
 	})
 
-	fs.collector.OnError(func(r *colly.Response, err error) {
+	fs.Collector.OnError(func(r *colly.Response, err error) {
 		fmt.Printf("ForumScraper got %v for %s\n", err, r.Request.URL)
 	})
 
 	return fs
 }
 
-func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time, subthreads bool) {
-	siteId, forumId, err := fs.db.InsertOrUpdateForum(fs.forumURL)
+func (fs *ForumScraper) LoadThreadsWithActivitySince(db *database.ScraperDB, cutoff time.Time, subthreads bool) {
+	siteId, forumId, err := db.InsertOrUpdateForum(fs.forumURL)
 	if err != nil {
 		panic(err)
 	}
 
-	fs.collector.Visit(fs.forumURL.String())
+	fs.Collector.Visit(fs.forumURL.String())
 	time.Sleep(1 + time.Duration(rand.Intn(3))*time.Second)
 
 	if len(fs.Threads) > 0 {
 		for pageNum := 2; fs.Threads[len(fs.Threads)-1].Latest.After(cutoff); pageNum++ {
 			time.Sleep(1 + time.Duration(rand.Intn(4))*time.Second)
 			next := fs.forumURL.JoinPath(fmt.Sprintf("page-%d", pageNum))
-			fs.collector.Visit(next.String())
+			fs.Collector.Visit(next.String())
 		}
 
 		for _, thread := range fs.Threads {
-			threadId, err := fs.db.InsertOrUpdateThread(siteId, forumId, thread.Thread)
+			threadId, err := db.InsertOrUpdateThread(siteId, forumId, thread.Thread)
 			if err != nil {
 				panic(err)
 			}
-			ts := NewThreadScraper(threadId, thread, fs.db)
-			ts.LoadCommentsSince(cutoff)
+			ts := NewThreadScraper(threadId, thread)
+			ts.LoadCommentsSince(db, cutoff)
 
 			comments := make([]model.Comment, len(ts.Comments), len(ts.Comments))
 			for i := range ts.Comments {
 				comments[i] = ts.Comments[i].Comment
 			}
-			ts.db.AddComments(siteId, threadId, comments)
+			db.AddComments(siteId, threadId, comments)
 		}
 	}
 
 	if subthreads && len(fs.SubForums) > 0 {
 		for _, subForumURL := range fs.SubForums {
-			sfs := NewForumScraper(subForumURL, fs.db)
-			sfs.LoadThreadsWithActivitySince(cutoff, subthreads)
+			sfs := NewForumScraper(subForumURL)
+			sfs.LoadThreadsWithActivitySince(db, cutoff, subthreads)
 		}
 	}
 
-	fs.db.SetForumLastScraped(forumId, time.Now())
+	db.SetForumLastScraped(forumId, time.Now())
 }
 
 func parseCompactCount(c string) (res uint) {

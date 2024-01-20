@@ -35,8 +35,8 @@ func runScrapeCommand(cmd *cobra.Command, args []string) {
 		defer sdb.Close()
 		if thread, err := sdb.FindThread(args[0]); err == nil {
 			xfThread := xf_scraper.XFThread{model.Thread{URL: thread.URL}}
-			ts := xf_scraper.NewThreadScraper(thread.Id, xfThread, sdb)
-			ts.LoadCommentsSince(cutoff)
+			ts := xf_scraper.NewThreadScraper(thread.Id, xfThread)
+			ts.LoadCommentsSince(sdb, cutoff)
 			comments := make([]model.Comment, len(ts.Comments), len(ts.Comments))
 			for i := range ts.Comments {
 				comments[i] = ts.Comments[i].Comment

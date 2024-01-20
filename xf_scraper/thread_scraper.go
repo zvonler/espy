@@ -20,28 +20,26 @@ import (
 type ThreadScraper struct {
 	threadId        model.ThreadID
 	thread          XFThread
-	db              *database.ScraperDB
 	Comments        []XFComment
-	pages           uint
-	commentScraper  *colly.Collector
-	pageNumScraper  *colly.Collector
+	PageCount       uint
+	CommentScraper  *colly.Collector
+	PageNumScraper  *colly.Collector
 	earliestScraped time.Time
 	latestScraped   time.Time
 }
 
-func NewThreadScraper(threadId model.ThreadID, thread XFThread, db *database.ScraperDB) *ThreadScraper {
+func NewThreadScraper(threadId model.ThreadID, thread XFThread) *ThreadScraper {
 	ts := new(ThreadScraper)
 	ts.threadId = threadId
 	ts.thread = thread
-	ts.db = db
 	ts.Comments = make([]XFComment, 0)
-	ts.pages = 1
+	ts.PageCount = 1
 
-	ts.pageNumScraper = newCollectorWithCFRoundtripper()
+	ts.PageNumScraper = newCollectorWithCFRoundtripper()
 
 	getPageCount := func(e *colly.HTMLElement) {
 		// Pages with nav bars have one at top and at bottom, so skip the second
-		if ts.pages > 1 {
+		if ts.PageCount > 1 {
 			return
 		}
 
@@ -51,28 +49,28 @@ func NewThreadScraper(threadId model.ThreadID, thread XFThread, db *database.Scr
 				lastPage = e.Text
 			})
 			if intPages, err := strconv.Atoi(lastPage); err == nil {
-				ts.pages = uint(intPages)
+				ts.PageCount = uint(intPages)
 			} else {
 				fmt.Printf("Couldn't parse lastPage from %v\n", lastPage)
 			}
 		})
 	}
 
-	ts.pageNumScraper.OnHTML("nav.pageNavWrapper--mixed", getPageCount)
-	if ts.pages == 1 {
-		ts.pageNumScraper.OnHTML("nav.pageNavWrapper--full", getPageCount)
+	ts.PageNumScraper.OnHTML("nav.pageNavWrapper--mixed", getPageCount)
+	if ts.PageCount == 1 {
+		ts.PageNumScraper.OnHTML("nav.pageNavWrapper--full", getPageCount)
 	}
 
-	ts.pageNumScraper.OnRequest(func(r *colly.Request) {
+	ts.PageNumScraper.OnRequest(func(r *colly.Request) {
 		fmt.Printf("PageNumScraper (%d) visiting %s\n", ts.threadId, r.URL.String())
 	})
 
-	ts.pageNumScraper.OnError(func(r *colly.Response, err error) {
+	ts.PageNumScraper.OnError(func(r *colly.Response, err error) {
 		fmt.Printf("PageNumScraper got error %v for url %s\n", err, r.Request.URL.String())
 	})
 
-	ts.commentScraper = newCollectorWithCFRoundtripper()
-	ts.commentScraper.OnHTML("article.message--post", func(e *colly.HTMLElement) {
+	ts.CommentScraper = newCollectorWithCFRoundtripper()
+	ts.CommentScraper.OnHTML("article.message--post", func(e *colly.HTMLElement) {
 		temp := XFComment{}
 		temp.Author = e.Attr("data-author")
 		e.ForEach("article.message-body", func(_ int, e *colly.HTMLElement) {
@@ -154,33 +152,33 @@ func NewThreadScraper(threadId model.ThreadID, thread XFThread, db *database.Scr
 		ts.Comments = append(ts.Comments, temp)
 	})
 
-	ts.commentScraper.OnRequest(func(r *colly.Request) {
+	ts.CommentScraper.OnRequest(func(r *colly.Request) {
 		fmt.Printf("CommentScraper (%d) visiting %s\n", ts.threadId, r.URL.String())
 	})
 
-	ts.commentScraper.OnError(func(r *colly.Response, err error) {
+	ts.CommentScraper.OnError(func(r *colly.Response, err error) {
 		fmt.Printf("CommentScraper (%d) got %v with body %s\n", ts.threadId, err, r.Body)
 	})
 
 	return ts
 }
 
-func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
-	if timeRange := ts.db.CommentTimeRange(ts.threadId); timeRange != nil {
+func (ts *ThreadScraper) LoadCommentsSince(db *database.ScraperDB, cutoff time.Time) {
+	if timeRange := db.CommentTimeRange(ts.threadId); timeRange != nil {
 		// If the database already has some comments for this thread, avoid
 		// re-loading them.
 		earliest, latest := timeRange[0], timeRange[1]
 
 		if ts.thread.Latest != latest {
 			// Loading the first page of the thread gets us the last page number
-			ts.pageNumScraper.Visit(ts.thread.URL.String())
+			ts.PageNumScraper.Visit(ts.thread.URL.String())
 			time.Sleep(1 + time.Duration(rand.Intn(2))*time.Second)
 
 			// Load from last page until earlier than the latest already loaded
-			for pageNum := ts.pages; pageNum >= 1; pageNum-- {
+			for pageNum := ts.PageCount; pageNum >= 1; pageNum-- {
 				time.Sleep(1 + time.Duration(rand.Intn(4))*time.Second)
 				next := ts.thread.pageURL(pageNum)
-				ts.commentScraper.Visit(next.String())
+				ts.CommentScraper.Visit(next.String())
 				if ts.earliestScraped.Before(latest) {
 					break
 				}
@@ -190,18 +188,18 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 		// Check if user has requested a backfill
 		if cutoff.Before(earliest) {
 			// If we already have the first comment of the thread, don't look for more
-			if !ts.db.FirstCommentLoaded(ts.threadId) {
+			if !db.FirstCommentLoaded(ts.threadId) {
 
 				// Loading the first page of the thread gets us the last page number
-				ts.pageNumScraper.Visit(ts.thread.URL.String())
+				ts.PageNumScraper.Visit(ts.thread.URL.String())
 				time.Sleep(1 + time.Duration(rand.Intn(2))*time.Second)
 
 				// Binary search to page containing posts older than earliest then load if before cutoff
 				tpf := NewThreadPageFinder(ts.thread)
-				for pageNum := tpf.FindCommentsBefore(earliest, ts.pages); pageNum >= 1; pageNum-- {
+				for pageNum := tpf.FindCommentsBefore(earliest, ts.PageCount); pageNum >= 1; pageNum-- {
 					time.Sleep(1 + time.Duration(rand.Intn(4))*time.Second)
 					next := ts.thread.pageURL(pageNum)
-					ts.commentScraper.Visit(next.String())
+					ts.CommentScraper.Visit(next.String())
 					if ts.earliestScraped.Before(cutoff) {
 						break
 					}
@@ -210,13 +208,13 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 		}
 	} else {
 		// Loading the first page of the thread gets us the last page number
-		ts.pageNumScraper.Visit(ts.thread.URL.String())
+		ts.PageNumScraper.Visit(ts.thread.URL.String())
 
 		// Load from last page until earlier than cutoff or out of comments
-		for pageNum := ts.pages; pageNum >= 1; pageNum-- {
+		for pageNum := ts.PageCount; pageNum >= 1; pageNum-- {
 			time.Sleep(1 + time.Duration(rand.Intn(4))*time.Second)
 			next := ts.thread.pageURL(pageNum)
-			ts.commentScraper.Visit(next.String())
+			ts.CommentScraper.Visit(next.String())
 			if ts.earliestScraped.Before(cutoff) {
 				break
 			}

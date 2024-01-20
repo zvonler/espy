@@ -31,19 +31,17 @@ type RedditComment struct {
 
 type ForumScraper struct {
 	forumURL *url.URL
-	db       *database.ScraperDB
 	Threads  []RedditThread
 }
 
-func NewForumScraper(url *url.URL, db *database.ScraperDB) *ForumScraper {
+func NewForumScraper(url *url.URL) *ForumScraper {
 	fs := new(ForumScraper)
 	fs.forumURL = url
-	fs.db = db
 	return fs
 }
 
-func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
-	siteId, forumId, err := fs.db.InsertOrUpdateForum(fs.forumURL)
+func (fs *ForumScraper) LoadThreadsWithActivitySince(db *database.ScraperDB, cutoff time.Time) {
+	siteId, forumId, err := db.InsertOrUpdateForum(fs.forumURL)
 	if err != nil {
 		panic(err)
 	}
@@ -82,11 +80,11 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(cutoff time.Time) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		threadScraper := NewThreadScraper(siteId, forumId, postAndComments, fs.db)
-		threadScraper.LoadCommentsSince(cutoff)
+		threadScraper := NewThreadScraper(siteId, forumId, postAndComments)
+		threadScraper.LoadCommentsSince(db, cutoff)
 	}
 
-	fs.db.SetForumLastScraped(forumId, time.Now())
+	db.SetForumLastScraped(forumId, time.Now())
 }
 
 /*---------------------------------------------------------------------------*/
@@ -95,20 +93,18 @@ type ThreadScraper struct {
 	siteId   model.SiteID
 	forumId  model.ForumID
 	post     *reddit.PostAndComments
-	db       *database.ScraperDB
 	Comments []RedditComment
 }
 
-func NewThreadScraper(siteId model.SiteID, forumId model.ForumID, post *reddit.PostAndComments, db *database.ScraperDB) *ThreadScraper {
+func NewThreadScraper(siteId model.SiteID, forumId model.ForumID, post *reddit.PostAndComments) *ThreadScraper {
 	ts := new(ThreadScraper)
 	ts.siteId = siteId
 	ts.forumId = forumId
 	ts.post = post
-	ts.db = db
 	return ts
 }
 
-func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
+func (ts *ThreadScraper) LoadCommentsSince(db *database.ScraperDB, cutoff time.Time) {
 	permalink, err := url.Parse("https://reddit.com" + ts.post.Post.Permalink)
 	if err != nil {
 		log.Fatal(err)
@@ -122,7 +118,7 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 			Replies:   uint(ts.post.Post.NumberOfComments),
 		},
 	}
-	threadId, err := ts.db.InsertOrUpdateThread(ts.siteId, ts.forumId, thread.Thread)
+	threadId, err := db.InsertOrUpdateThread(ts.siteId, ts.forumId, thread.Thread)
 	if err != nil {
 		panic(err)
 	}
@@ -157,5 +153,5 @@ func (ts *ThreadScraper) LoadCommentsSince(cutoff time.Time) {
 	for i := range ts.Comments {
 		comments[i] = ts.Comments[i].Comment
 	}
-	ts.db.AddComments(ts.siteId, threadId, comments)
+	db.AddComments(ts.siteId, threadId, comments)
 }

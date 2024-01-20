@@ -78,11 +78,11 @@ func runUpdateCommand(cmd *cobra.Command, args []string) {
 	for i, url := range urls {
 		fmt.Printf("%d: %s\n", i, url)
 		if strings.Contains(url.Host, "reddit.com") {
-			fs := reddit.NewForumScraper(url, sdb)
-			fs.LoadThreadsWithActivitySince(cutoff)
+			fs := reddit.NewForumScraper(url)
+			fs.LoadThreadsWithActivitySince(sdb, cutoff)
 		} else if strings.Contains(url.Path, "/forums/") {
-			fs := xf_scraper.NewForumScraper(url, sdb)
-			fs.LoadThreadsWithActivitySince(cutoff, false)
+			fs := xf_scraper.NewForumScraper(url)
+			fs.LoadThreadsWithActivitySince(sdb, cutoff, false)
 		}
 	}
 }
