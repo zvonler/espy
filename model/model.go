@@ -30,3 +30,8 @@ type Comment struct {
 	Published time.Time
 	Content   string
 }
+
+type Forum struct {
+	Id  ForumID
+	URL *url.URL
+}

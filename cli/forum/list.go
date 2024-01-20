@@ -27,11 +27,11 @@ func runListCommand(cmd *cobra.Command, args []string) {
 	}
 	defer sdb.Close()
 
-	if forumsByUrl, err := sdb.GetForums(); err == nil {
-		colWidth := uint(math.Round(math.Ceil(math.Log10(float64(len(forumsByUrl))))))
+	if forums, err := sdb.GetForums(); err == nil {
+		colWidth := uint(math.Round(math.Ceil(math.Log10(float64(len(forums))))))
 		fmtString := fmt.Sprintf("%%0%dd: %%s\n", colWidth)
-		for id, url := range forumsByUrl {
-			fmt.Printf(fmtString, id, url)
+		for _, f := range forums {
+			fmt.Printf(fmtString, f.Id, f.URL)
 		}
 	}
 

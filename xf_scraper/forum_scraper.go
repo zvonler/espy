@@ -43,10 +43,12 @@ func NewForumScraper(forumURL *url.URL, db *database.ScraperDB) *ForumScraper {
 		temp.Author = e.Attr("data-author")
 
 		e.ForEach("div.structItem-title", func(_ int, e *colly.HTMLElement) {
-			temp.Title = e.ChildText("a")
-			if threadHref, err := url.Parse(e.ChildAttr("a", "href")); err == nil {
-				temp.URL = e.Request.URL.ResolveReference(threadHref)
-			}
+			e.ForEach("a", func(_ int, e *colly.HTMLElement) {
+				temp.Title = e.Text
+				if threadHref, err := url.Parse(e.Attr("href")); err == nil {
+					temp.URL = e.Request.URL.ResolveReference(threadHref)
+				}
+			})
 		})
 
 		e.ForEach("li.structItem-startDate", func(_ int, e *colly.HTMLElement) {
@@ -81,7 +83,11 @@ func NewForumScraper(forumURL *url.URL, db *database.ScraperDB) *ForumScraper {
 			}
 		})
 
-		fs.Threads = append(fs.Threads, temp)
+		if temp.URL != nil {
+			fs.Threads = append(fs.Threads, temp)
+		} else {
+			fmt.Printf("Skipping thread %q\n", temp)
+		}
 	}
 
 	fs.collector.OnHTML("div.structItem--thread", processThread)

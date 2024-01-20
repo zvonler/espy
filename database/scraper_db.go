@@ -259,17 +259,16 @@ func (sdb *ScraperDB) AddComments(siteId model.SiteID, threadId model.ThreadID, 
 	return
 }
 
-func (sdb *ScraperDB) GetForums() (forumsById map[model.ForumID]*url.URL, err error) {
-	stmt := `SELECT id, url FROM forum`
+func (sdb *ScraperDB) GetForums() (forums []model.Forum, err error) {
+	stmt := `SELECT id, url FROM forum ORDER BY id`
 
-	forumsById = make(map[model.ForumID]*url.URL)
 	sdb.ForEachRowOrPanic(
 		func(rows *sql.Rows) {
 			var id uint
 			var urlStr string
 			rows.Scan(&id, &urlStr)
 			if url, err := url.Parse(urlStr); err == nil {
-				forumsById[model.ForumID(id)] = url
+				forums = append(forums, model.Forum{model.ForumID(id), url})
 			} else {
 				panic(err)
 			}

@@ -46,7 +46,7 @@ func paginateComments(comments []model.Comment) {
 				ansi.Fprintf(stdin, ansi.Red, "%s", c.Author)
 				ansi.Fprintf(stdin, ansi.Default, ": ")
 				ansi.Fprintf(stdin, ansi.Green, "\"")
-				ansi.Fprintf(stdin, ansi.Default, c.Content)
+				ansi.Fprintf(stdin, ansi.Default, "%s", c.Content)
 				ansi.Fprintf(stdin, ansi.Green, "\"\n")
 				ansi.Fprintln(stdin, ansi.Blue, "--------")
 			}

@@ -1,6 +1,7 @@
 package scrape
 
 import (
+	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -17,11 +18,12 @@ import (
 var (
 	lookbackDays int
 	dbPath       string
+	noChanges    bool
 )
 
 func NewCommand() *cobra.Command {
 	scrapeCommand := &cobra.Command{
-		Use:   "scrape [-d DB] <URL>",
+		Use:   "scrape <URL>",
 		Short: "Scrape forums and threads",
 		Args:  cobra.ExactArgs(1),
 		Example: "" +
@@ -31,6 +33,7 @@ func NewCommand() *cobra.Command {
 
 	scrapeCommand.Flags().IntVar(&lookbackDays, "lookback-days", 7, "Ignore activity earlier than lookback-days before now")
 	scrapeCommand.Flags().StringVar(&dbPath, "database", "espy.db", "Database filename")
+	scrapeCommand.Flags().BoolVar(&noChanges, "no-changes", false, "Make no changes to the database")
 
 	return scrapeCommand
 }
@@ -65,7 +68,13 @@ func runScrapeCommand(cmd *cobra.Command, args []string) {
 			for i := range ts.Comments {
 				comments[i] = ts.Comments[i].Comment
 			}
-			sdb.AddComments(thread.SiteId, thread.Id, comments)
+			if !noChanges {
+				sdb.AddComments(thread.SiteId, thread.Id, comments)
+			} else {
+				for _, c := range comments {
+					fmt.Println(c.URL.String())
+				}
+			}
 		} else {
 			// Else get forum from thread page?
 			panic("Can't load new thread without forum and site\n")
