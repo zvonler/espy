@@ -61,8 +61,8 @@ func printThreads(threads []xf_scraper.XFThread) {
 		fmt.Printf("%s\n", t.URL)
 		fmt.Println("--------")
 	}
-
 }
+
 func paginateComments(comments []xf_scraper.XFComment) {
 	cmd := exec.Command("/usr/bin/less", "-FRX")
 	cmd.Stdout = os.Stdout
@@ -94,7 +94,6 @@ func printComments(comments []xf_scraper.XFComment) {
 		fmt.Printf("%s %s\n%s: %q\n", c.URL, c.Published, c.Author, c.Content)
 		fmt.Println("--------")
 	}
-
 }
 
 func runParseCommand(cmd *cobra.Command, args []string) {
