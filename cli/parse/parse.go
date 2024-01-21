@@ -7,10 +7,12 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/bit101/go-ansi"
 	"github.com/spf13/cobra"
 	"github.com/zvonler/espy/model"
+	"github.com/zvonler/espy/reddit"
 	"github.com/zvonler/espy/xf_scraper"
 	"golang.org/x/term"
 )
@@ -104,7 +106,17 @@ func runParseCommand(cmd *cobra.Command, args []string) {
 
 	isTty := term.IsTerminal(int(os.Stdout.Fd()))
 
-	if strings.Contains(url.Path, "/forums/") {
+	if strings.Contains(url.Host, "reddit.com") {
+		fs := reddit.NewForumScraper(url)
+		cutoff := time.Now().AddDate(0, 0, -7)
+		posts, err := fs.SubredditPostsSince(cutoff)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, p := range posts {
+			fmt.Println(p.Title)
+		}
+	} else if strings.Contains(url.Path, "/forums/") {
 		fs := xf_scraper.NewForumScraper(url)
 		fs.Collector.Visit(url.String())
 		for _, thread := range fs.Threads {

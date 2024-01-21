@@ -32,25 +32,12 @@ type RedditComment struct {
 type ForumScraper struct {
 	forumURL *url.URL
 	Threads  []RedditThread
+	client   *reddit.Client
 }
 
 func NewForumScraper(url *url.URL) *ForumScraper {
 	fs := new(ForumScraper)
 	fs.forumURL = url
-	return fs
-}
-
-func (fs *ForumScraper) LoadThreadsWithActivitySince(db *database.ScraperDB, cutoff time.Time) {
-	siteId, forumId, err := db.InsertOrUpdateForum(fs.forumURL)
-	if err != nil {
-		panic(err)
-	}
-
-	subreddit := fs.forumURL.Path
-	if !strings.HasPrefix(subreddit, "/r/") {
-		panic(subreddit)
-	}
-	subreddit = strings.TrimPrefix(subreddit, "/r/")
 
 	content, err := ioutil.ReadFile("reddit.agent")
 	if err != nil {
@@ -64,19 +51,40 @@ func (fs *ForumScraper) LoadThreadsWithActivitySince(db *database.ScraperDB, cut
 
 	client, err := reddit.NewClient(credentials)
 	if err != nil {
-		fmt.Printf("Failed to fetch %s: %v\n", subreddit, err)
-		return
+		fmt.Printf("Failed to create client: %v\n", err)
+		return nil
 	}
+	fs.client = client
 
-	posts, _, err := client.Subreddit.NewPosts(context.Background(), subreddit, &reddit.ListOptions{
+	return fs
+}
+
+func (fs *ForumScraper) SubredditPostsSince(cutoff time.Time) (posts []*reddit.Post, err error) {
+	subreddit := fs.forumURL.Path
+	if !strings.HasPrefix(subreddit, "/r/") {
+		panic(subreddit)
+	}
+	subreddit = strings.TrimPrefix(subreddit, "/r/")
+
+	posts, _, err = fs.client.Subreddit.NewPosts(context.Background(), subreddit, &reddit.ListOptions{
 		Limit: 300,
 	})
+	return
+}
+
+func (fs *ForumScraper) LoadThreadsWithActivitySince(db *database.ScraperDB, cutoff time.Time) {
+	posts, err := fs.SubredditPostsSince(cutoff)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	siteId, forumId, err := db.InsertOrUpdateForum(fs.forumURL)
+	if err != nil {
+		panic(err)
+	}
+
 	for _, post := range posts {
-		postAndComments, _, err := client.Post.Get(context.Background(), post.ID)
+		postAndComments, _, err := fs.client.Post.Get(context.Background(), post.ID)
 		if err != nil {
 			log.Fatal(err)
 		}
